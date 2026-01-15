@@ -1,16 +1,27 @@
 import { View, Text, StyleSheet, Image } from "react-native";
 import { useEffect } from "react";
 import { StatusBar } from "expo-status-bar";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 export default function WelcomeScreen({ navigation }) {
 
   useEffect(() => {
-    const timer = setTimeout(() => {
-      navigation.replace("LoginScree");
-    }, 3000);
-
-    return () => clearTimeout(timer);
+    checkLogin();
   }, []);
+
+  const checkLogin = async () => {
+    try {
+      const token = await AsyncStorage.getItem("token");
+      if (token) {
+        navigation.replace("HomeScreen");
+      } else {
+        navigation.replace("LoginScreen");
+      }
+    } catch (err) {
+      console.log("Error checking login:", err);
+      navigation.replace("LoginScreen");
+    }
+  };
 
   return (
     <View style={styles.container}>
@@ -24,16 +35,14 @@ export default function WelcomeScreen({ navigation }) {
 
       {/* App Name */}
       <Text style={styles.title}>BlogEver</Text>
-      <Text style={styles.subtitle}>Share your thoughts ✍️</Text>
 
-      {/* 🔽 ADDED DETAILS */}
+      {/* Description */}
       <Text style={styles.description}>
         A modern platform to write, share, and explore blogs from creators around the world.
       </Text>
 
-
+      {/* Version */}
       <Text style={styles.version}>Version 1.0.0</Text>
-      {/* 🔼 ADDED DETAILS */}
 
       {/* Footer */}
       <View style={styles.footer}>
@@ -53,8 +62,8 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   logo: {
-    width: 110,
-    height: 110,
+    width: 150,
+    height: 150,
     resizeMode: "contain",
     marginBottom: 20,
     borderRadius: 100,
@@ -66,13 +75,6 @@ const styles = StyleSheet.create({
     fontSize: 32,
     fontWeight: "bold",
   },
-  subtitle: {
-    color: "#aaa",
-    marginTop: 10,
-    fontSize: 16,
-  },
-
-  /* 🔽 ADDED STYLES */
   description: {
     color: "#999",
     fontSize: 14,
@@ -80,22 +82,11 @@ const styles = StyleSheet.create({
     textAlign: "center",
     paddingHorizontal: 30,
   },
-  features: {
-    marginTop: 15,
-  },
-  feature: {
-    color: "#888",
-    fontSize: 13,
-    textAlign: "center",
-    marginTop: 4,
-  },
   version: {
     color: "#555",
     fontSize: 12,
     marginTop: 20,
   },
-  /* 🔼 ADDED STYLES */
-
   footer: {
     position: "absolute",
     bottom: 50,

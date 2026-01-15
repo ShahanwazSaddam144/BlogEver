@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { View, Text, StyleSheet, TouchableOpacity, Alert, SafeAreaView } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useNavigation } from "@react-navigation/native";
@@ -7,6 +7,20 @@ import Icon from "react-native-vector-icons/Ionicons";
 export default function BottomBar() {
   const navigation = useNavigation();
   const [activeTab, setActiveTab] = useState("Home");
+  const [userToken, setUserToken] = useState(null);
+
+  // Load token on mount to keep user logged in
+  useEffect(() => {
+    const loadToken = async () => {
+      const token = await AsyncStorage.getItem("token");
+      if (!token) {
+        navigation.replace("LoginScreen");
+      } else {
+        setUserToken(token);
+      }
+    };
+    loadToken();
+  }, []);
 
   const handleLogout = async () => {
     Alert.alert(
@@ -18,7 +32,20 @@ export default function BottomBar() {
           text: "Logout",
           style: "destructive",
           onPress: async () => {
-            await AsyncStorage.removeItem("user");
+            try {
+              // Call backend logout (optional if token is server-verified)
+              await fetch("http://192.168.100.77:5000/logout", {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                  Authorization: `Bearer ${userToken}`,
+                },
+              });
+            } catch (error) {
+              console.log("Logout API error", error);
+            }
+            await AsyncStorage.removeItem("token"); // remove token
+            await AsyncStorage.removeItem("user");  // remove user info
             navigation.replace("LoginScreen");
           },
         },
@@ -42,11 +69,7 @@ export default function BottomBar() {
   return (
     <SafeAreaView style={styles.safeArea}>
       <View style={styles.container}>
-        {/* Home */}
-        <TouchableOpacity
-          style={styles.tab}
-          onPress={() => setActiveTab("Home")}
-        >
+        <TouchableOpacity style={styles.tab} onPress={() => setActiveTab("Home")}>
           <Icon
             name="home-outline"
             size={28}
@@ -57,11 +80,7 @@ export default function BottomBar() {
           </Text>
         </TouchableOpacity>
 
-        {/* Chats */}
-        <TouchableOpacity
-          style={styles.tab}
-          onPress={() => setActiveTab("Chats")}
-        >
+        <TouchableOpacity style={styles.tab} onPress={() => setActiveTab("Chats")}>
           <Icon
             name="chatbubble-ellipses-outline"
             size={28}
@@ -72,7 +91,6 @@ export default function BottomBar() {
           </Text>
         </TouchableOpacity>
 
-        {/* Profile */}
         <TouchableOpacity style={styles.tab} onPress={handleProfileClick}>
           <Icon
             name="person-outline"
@@ -90,16 +108,16 @@ export default function BottomBar() {
 
 const styles = StyleSheet.create({
   safeArea: {
-    backgroundColor: "#000000",
+    backgroundColor: "#000",
   },
   container: {
     flexDirection: "row",
     justifyContent: "space-around",
-    paddingVertical: 40,
-    paddingTop: 10, 
+    paddingVertical: 35,
+    paddingTop: 10,
     borderTopColor: "#222",
     borderTopWidth: 1,
-    backgroundColor: "#000000",
+    backgroundColor: "#000",
   },
   tab: {
     alignItems: "center",
