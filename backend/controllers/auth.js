@@ -2,14 +2,15 @@ const express = require("express");
 const User = require("../Database/auth");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
+
 const router = express.Router();
 
-const JWT_SECRET = process.env.JWT_SECRET; 
+const JWT_SECRET = process.env.JWT_SECRET || "a1f4b7d8e9c0f2a3b5c6d7e8f9a0b1c2";
 
-// Signup
 router.post("/signIn", async (req, res) => {
   try {
     const { name, email, password } = req.body;
+
     if (!name || !email || !password) {
       return res.status(400).json({ message: "Please fill all fields" });
     }
@@ -20,56 +21,95 @@ router.post("/signIn", async (req, res) => {
     }
 
     const hashedPassword = await bcrypt.hash(password, 10);
-    const newUser = new User({ name, email, password: hashedPassword });
+
+    const newUser = new User({
+      name,
+      email,
+      password: hashedPassword,
+    });
+
     await newUser.save();
 
-    const token = jwt.sign({ id: newUser._id }, JWT_SECRET, { expiresIn: "7d" });
+    const token = jwt.sign(
+      { id: newUser._id, email: newUser.email },
+      JWT_SECRET,
+      { expiresIn: "7d" }
+    );
 
-    res.status(201).json({ success: true, user: { name, email }, token });
+    res.status(201).json({
+      success: true,
+      user: { name: newUser.name, email: newUser.email },
+      token,
+    });
   } catch (err) {
-    res.status(500).json({ message: "Server error", error: err.message });
+    res.status(500).json({ message: "Server error" });
   }
 });
 
-// Login
 router.post("/login", async (req, res) => {
   try {
     const { email, password } = req.body;
-    if (!email || !password) return res.status(400).json({ message: "Please fill all fields" });
+
+    if (!email || !password) {
+      return res.status(400).json({ message: "Please fill all fields" });
+    }
 
     const user = await User.findOne({ email });
-    if (!user) return res.status(404).json({ message: "User not found" });
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
 
     const isMatch = await bcrypt.compare(password, user.password);
-    if (!isMatch) return res.status(401).json({ message: "Invalid email or password" });
+    if (!isMatch) {
+      return res.status(401).json({ message: "Invalid email or password" });
+    }
 
-    const token = jwt.sign({ id: user._id }, JWT_SECRET, { expiresIn: "7d" });
+    const token = jwt.sign(
+      { id: user._id, email: user.email },
+      JWT_SECRET,
+      { expiresIn: "7d" }
+    );
 
-    res.status(200).json({ success: true, user: { name: user.name, email: user.email }, token });
+    res.status(200).json({
+      success: true,
+      user: { name: user.name, email: user.email },
+      token,
+    });
   } catch (err) {
-    res.status(500).json({ message: "Server error", error: err.message });
+    res.status(500).json({ message: "Server error" });
   }
 });
 
-// Get login status
-router.get("/login-status", async (req, res) => {
+router.get("/login-status", (req, res) => {
   try {
-    const token = req.headers.authorization?.split(" ")[1];
-    if (!token) return res.status(401).json({ loggedIn: false });
+    const authHeader = req.headers.authorization;
+    if (!authHeader) {
+      return res.status(401).json({ loggedIn: false });
+    }
+
+    const token = authHeader.split(" ")[1];
 
     jwt.verify(token, JWT_SECRET, (err, decoded) => {
-      if (err) return res.status(401).json({ loggedIn: false });
+      if (err) {
+        return res.status(401).json({ loggedIn: false });
+      }
 
-      res.status(200).json({ loggedIn: true, userId: decoded.id });
+      res.status(200).json({
+        loggedIn: true,
+        userId: decoded.id,
+        email: decoded.email, 
+      });
     });
   } catch (err) {
-    res.status(500).json({ loggedIn: false, message: "Server error", error: err.message });
-  }token
+    res.status(500).json({ loggedIn: false });
+  }
 });
 
-// Logout (frontend just discards )
-router.post("/logout", async (req, res) => {
-  res.status(200).json({ success: true, message: "Logged out successfully" });
+router.post("/logout", (req, res) => {
+  res.status(200).json({
+    success: true,
+    message: "Logged out successfully",
+  });
 });
 
 module.exports = router;

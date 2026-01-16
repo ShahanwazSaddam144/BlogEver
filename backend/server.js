@@ -4,6 +4,7 @@ const cors = require("cors");
 const dotenv = require("dotenv");
 const mongoose = require("mongoose");
 const Auth = require("./controllers/auth");
+const Profile = require("./controllers/profile");
 const app = express();
 const port = process.env.PORT || 5000;
 
@@ -24,7 +25,8 @@ app.use(limiter);
 dotenv.config();
 
 // Routes
-app.use('/', Auth);
+app.use('/api/auth', Auth);
+app.use('/api', Profile);
 
 
 mongoose

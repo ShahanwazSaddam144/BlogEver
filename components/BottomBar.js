@@ -4,12 +4,12 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useNavigation } from "@react-navigation/native";
 import Icon from "react-native-vector-icons/Ionicons";
 
-export default function BottomBar() {
+export default function BottomBar(navigate) {
   const navigation = useNavigation();
   const [activeTab, setActiveTab] = useState("Home");
   const [userToken, setUserToken] = useState(null);
 
-  // Load token on mount to keep user logged in
+
   useEffect(() => {
     const loadToken = async () => {
       const token = await AsyncStorage.getItem("token");
@@ -33,8 +33,8 @@ export default function BottomBar() {
           style: "destructive",
           onPress: async () => {
             try {
-              // Call backend logout (optional if token is server-verified)
-              await fetch("http://192.168.100.77:5000/logout", {
+              
+              await fetch("http://192.168.100.77:5000/api/auth/logout", {
                 method: "POST",
                 headers: {
                   "Content-Type": "application/json",
@@ -44,8 +44,8 @@ export default function BottomBar() {
             } catch (error) {
               console.log("Logout API error", error);
             }
-            await AsyncStorage.removeItem("token"); // remove token
-            await AsyncStorage.removeItem("user");  // remove user info
+            await AsyncStorage.removeItem("token"); 
+            await AsyncStorage.removeItem("user");  
             navigation.replace("LoginScreen");
           },
         },
@@ -91,7 +91,7 @@ export default function BottomBar() {
           </Text>
         </TouchableOpacity>
 
-        <TouchableOpacity style={styles.tab} onPress={handleProfileClick}>
+        <TouchableOpacity style={styles.tab} onPress={() => navigation.navigate("ProfileScreen")}>
           <Icon
             name="person-outline"
             size={28}
