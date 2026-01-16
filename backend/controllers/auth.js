@@ -26,15 +26,13 @@ router.post("/signIn", async (req, res) => {
       name,
       email,
       password: hashedPassword,
+      tokens: [],
     });
 
-    await newUser.save();
+    const token = jwt.sign({ id: newUser._id, email: newUser.email }, JWT_SECRET, { expiresIn: "7d" });
+    newUser.tokens.push({ token });
 
-    const token = jwt.sign(
-      { id: newUser._id, email: newUser.email },
-      JWT_SECRET,
-      { expiresIn: "7d" }
-    );
+    await newUser.save();
 
     res.status(201).json({
       success: true,
@@ -64,11 +62,9 @@ router.post("/login", async (req, res) => {
       return res.status(401).json({ message: "Invalid email or password" });
     }
 
-    const token = jwt.sign(
-      { id: user._id, email: user.email },
-      JWT_SECRET,
-      { expiresIn: "7d" }
-    );
+    const token = jwt.sign({ id: user._id, email: user.email }, JWT_SECRET, { expiresIn: "7d" });
+    user.tokens.push({ token });
+    await user.save();
 
     res.status(200).json({
       success: true,
@@ -80,7 +76,7 @@ router.post("/login", async (req, res) => {
   }
 });
 
-router.get("/login-status", (req, res) => {
+router.get("/login-status", async (req, res) => {
   try {
     const authHeader = req.headers.authorization;
     if (!authHeader) {
@@ -89,27 +85,41 @@ router.get("/login-status", (req, res) => {
 
     const token = authHeader.split(" ")[1];
 
-    jwt.verify(token, JWT_SECRET, (err, decoded) => {
-      if (err) {
-        return res.status(401).json({ loggedIn: false });
-      }
+    const decoded = jwt.verify(token, JWT_SECRET);
 
-      res.status(200).json({
-        loggedIn: true,
-        userId: decoded.id,
-        email: decoded.email, 
-      });
+    const user = await User.findOne({ _id: decoded.id, "tokens.token": token });
+    if (!user) return res.status(401).json({ loggedIn: false });
+
+    res.status(200).json({
+      loggedIn: true,
+      userId: decoded.id,
+      email: decoded.email,
     });
   } catch (err) {
-    res.status(500).json({ loggedIn: false });
+    res.status(401).json({ loggedIn: false });
   }
 });
 
-router.post("/logout", (req, res) => {
-  res.status(200).json({
-    success: true,
-    message: "Logged out successfully",
-  });
+router.post("/logout", async (req, res) => {
+  try {
+    const authHeader = req.headers.authorization;
+    if (!authHeader) return res.status(400).json({ success: false, message: "No token provided" });
+
+    const token = authHeader.split(" ")[1];
+
+    const user = await User.findOne({ "tokens.token": token });
+    if (!user) return res.status(400).json({ success: false, message: "Invalid token" });
+
+    user.tokens = user.tokens.filter(t => t.token !== token);
+    await user.save();
+
+    res.status(200).json({
+      success: true,
+      message: "Logged out successfully",
+    });
+  } catch (err) {
+    res.status(500).json({ message: "Server error" });
+  }
 });
 
 module.exports = router;

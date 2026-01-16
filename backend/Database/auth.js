@@ -4,6 +4,7 @@ const userschema = new mongoose.Schema({
     name: {type:String, required:true},
     email: {type:String, required:true},
     password: {type:String, required:true},
+    tokens: [{ token: String }],
     createdAt: {type:Date, default: Date.now}
 });
 

@@ -2,7 +2,8 @@ import React, { useState, useEffect } from "react";
 import { View, Text, StyleSheet, TouchableOpacity, Alert, SafeAreaView } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useNavigation } from "@react-navigation/native";
-import Icon from "react-native-vector-icons/Ionicons";
+import { Ionicons } from "@expo/vector-icons";
+
 
 export default function BottomBar(navigate) {
   const navigation = useNavigation();
@@ -21,56 +22,13 @@ export default function BottomBar(navigate) {
     };
     loadToken();
   }, []);
-
-  const handleLogout = async () => {
-    Alert.alert(
-      "Logout",
-      "Are you sure you want to logout?",
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Logout",
-          style: "destructive",
-          onPress: async () => {
-            try {
-              
-              await fetch("http://192.168.100.77:5000/api/auth/logout", {
-                method: "POST",
-                headers: {
-                  "Content-Type": "application/json",
-                  Authorization: `Bearer ${userToken}`,
-                },
-              });
-            } catch (error) {
-              console.log("Logout API error", error);
-            }
-            await AsyncStorage.removeItem("token"); 
-            await AsyncStorage.removeItem("user");  
-            navigation.replace("LoginScreen");
-          },
-        },
-      ],
-      { cancelable: true }
-    );
-  };
-
-  const handleProfileClick = () => {
-    Alert.alert(
-      "Profile",
-      "Choose an action",
-      [
-        { text: "Cancel", style: "cancel" },
-        { text: "Logout", onPress: handleLogout, style: "destructive" },
-      ],
-      { cancelable: true }
-    );
-  };
+ 
 
   return (
     <SafeAreaView style={styles.safeArea}>
       <View style={styles.container}>
-        <TouchableOpacity style={styles.tab} onPress={() => setActiveTab("Home")}>
-          <Icon
+        <TouchableOpacity style={styles.tab} onPress={() => navigation.navigate("HomeScreen")}>
+          <Ionicons
             name="home-outline"
             size={28}
             color={activeTab === "Home" ? "#fff" : "#777"}
@@ -80,19 +38,19 @@ export default function BottomBar(navigate) {
           </Text>
         </TouchableOpacity>
 
-        <TouchableOpacity style={styles.tab} onPress={() => setActiveTab("Chats")}>
-          <Icon
+        <TouchableOpacity style={styles.tab} onPress={() => navigation.navigate("AddBlogScreen")}>
+          <Ionicons
             name="chatbubble-ellipses-outline"
             size={28}
             color={activeTab === "Chats" ? "#fff" : "#777"}
           />
           <Text style={[styles.label, activeTab === "Chats" && { color: "#fff" }]}>
-            Chats
+            Blogs
           </Text>
         </TouchableOpacity>
 
         <TouchableOpacity style={styles.tab} onPress={() => navigation.navigate("ProfileScreen")}>
-          <Icon
+          <Ionicons
             name="person-outline"
             size={28}
             color={activeTab === "Profile" ? "#fff" : "#777"}

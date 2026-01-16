@@ -1,24 +1,65 @@
-import { View, Text, StyleSheet, TextInput, TouchableOpacity, ScrollView, Alert } from "react-native";
-import { useState, useEffect } from "react";
+import {
+  View,
+  Text,
+  StyleSheet,
+  TextInput,
+  TouchableOpacity,
+  ScrollView,
+  Animated,
+} from "react-native";
+import { useState, useEffect, useRef } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import BottomBar from "../components/BottomBar";
+import { Ionicons } from "@expo/vector-icons";
 
 export default function ProfileScreen({ navigation }) {
   const [userName, setUserName] = useState("");
   const [userEmail, setUserEmail] = useState("");
   const [initials, setInitials] = useState("");
+
   const [desc, setDesc] = useState("");
   const [age, setAge] = useState("");
   const [role, setRole] = useState("");
+
   const [profileExists, setProfileExists] = useState(false);
-  const [userToken, setUserToken] = useState("");
+  const [editMode, setEditMode] = useState(false);
+
+  // Custom alert state
+  const [alertMessage, setAlertMessage] = useState("");
+  const [alertType, setAlertType] = useState("success");
+  const alertAnim = useRef(new Animated.Value(0)).current;
+
+  // Settings popup
+  const [showSettingsPopup, setShowSettingsPopup] = useState(false);
+
+  // Logout confirmation
+  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
 
   useEffect(() => {
     getUser();
     loadToken();
   }, []);
 
-  // Fetch user info from AsyncStorage
+  // Custom alert function
+  const showAlert = (message, type = "success") => {
+    setAlertMessage(message);
+    setAlertType(type);
+    Animated.timing(alertAnim, {
+      toValue: 1,
+      duration: 300,
+      useNativeDriver: true,
+    }).start(() => {
+      setTimeout(() => {
+        Animated.timing(alertAnim, {
+          toValue: 0,
+          duration: 300,
+          useNativeDriver: true,
+        }).start();
+      }, 2000);
+    });
+  };
+
+  // Fetch logged-in user from AsyncStorage
   const getUser = async () => {
     try {
       const user = await AsyncStorage.getItem("user");
@@ -27,161 +68,206 @@ export default function ProfileScreen({ navigation }) {
         setUserName(parsedUser.name);
         setUserEmail(parsedUser.email);
         setInitials(getInitials(parsedUser.name));
-        fetchProfile(parsedUser.email); // fetch profile using email
+        fetchProfile(parsedUser.email);
       }
     } catch (err) {
-      console.log("Error fetching user:", err);
+      console.log("User fetch error:", err);
     }
   };
 
-  // Get initials from name
-  const getInitials = (name) => {
-    if (!name) return "";
-    return name
-      .split(" ")
-      .filter((word) => word.length > 0)
+  const getInitials = (name) =>
+    name
+      ?.split(" ")
+      .filter(Boolean)
       .slice(0, 3)
-      .map((word) => word[0].toUpperCase())
-      .join("");
-  };
+      .map((w) => w[0].toUpperCase())
+      .join("") || "";
 
-  // Fetch profile from backend
   const fetchProfile = async (email) => {
     try {
-      const res = await fetch(`http://192.168.100.77:5000/api/profile?email=${email}`);
-      const data = await res.json();
+      const res = await fetch(
+        `http://192.168.100.77:5000/api/profile?email=${email}`
+      );
       if (res.ok) {
+        const data = await res.json();
         setDesc(data.desc);
-        setAge(data.age.toString());
+        setAge(String(data.age));
         setRole(data.role);
         setProfileExists(true);
+        setEditMode(false);
       } else {
         setProfileExists(false);
       }
     } catch (err) {
-      console.log("Error fetching profile:", err);
+      console.log("Profile fetch error:", err);
     }
   };
 
-  // Save profile to backend
   const handleSaveProfile = async () => {
-    if (!desc || !age || !role || !userEmail) {
-      alert("Please fill all fields");
+    if (!desc || !age || !role) {
+      showAlert("Please fill all fields", "error");
       return;
     }
 
     try {
       const res = await fetch("http://192.168.100.77:5000/api/profile", {
-        method: "POST",
+        method: profileExists ? "PUT" : "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: userEmail, desc, age: Number(age), role }),
+        body: JSON.stringify({
+          email: userEmail,
+          desc,
+          age: Number(age),
+          role,
+        }),
       });
 
       const data = await res.json();
+
       if (res.ok) {
-        alert(data.message);
+        showAlert(data.message, "success");
         setProfileExists(true);
+        setEditMode(false);
       } else {
-        alert(data.message || "Error saving profile");
+        showAlert(data.message || "Failed to save profile", "error");
       }
     } catch (err) {
-      console.log("Error saving profile:", err);
-      alert("Server error");
+      console.log("Save error:", err);
+      showAlert("Server error", "error");
     }
   };
 
-  // Load token from AsyncStorage
   const loadToken = async () => {
     const token = await AsyncStorage.getItem("token");
-    if (!token) {
-      navigation.replace("LoginScreen");
-    } else {
-      setUserToken(token);
-    }
+    if (!token) navigation.replace("LoginScreen");
   };
 
-  // Logout function
-  const handleLogout = async () => {
-    Alert.alert(
-      "Logout",
-      "Are you sure you want to logout?",
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Logout",
-          style: "destructive",
-          onPress: async () => {
-            try {
-              await AsyncStorage.removeItem("token");
-              await AsyncStorage.removeItem("user");
-              navigation.replace("LoginScreen");
-            } catch (error) {
-              console.log("Logout error", error);
-            }
-          },
-        },
-      ],
-      { cancelable: true }
+  // When Logout is confirmed
+  const confirmLogout = async () => {
+    setShowLogoutConfirm(false);
+    setShowSettingsPopup(false);
+    showAlert("Logging out...", "success");
+    setTimeout(async () => {
+      await AsyncStorage.multiRemove(["token", "user"]);
+      navigation.replace("LoginScreen");
+    }, 500);
+  };
+
+  const cancelLogout = () => {
+    setShowLogoutConfirm(false);
+  };
+
+  const EditableInput = ({ value, onChangeText, placeholder, keyboardType }) => {
+    return (
+      <TextInput
+        style={[styles.input, profileExists && !editMode && styles.disabledInput]}
+        placeholder={placeholder}
+        placeholderTextColor="#aaa"
+        value={value}
+        onChangeText={onChangeText}
+        editable={true}
+        keyboardType={keyboardType || "default"}
+        onFocus={() => {
+          if (profileExists && !editMode) setEditMode(true);
+        }}
+      />
     );
   };
 
   return (
     <>
       <ScrollView contentContainerStyle={styles.container}>
+        {/* Header with settings icon */}
+        <View style={styles.header}>
+          <Text style={styles.username}>{userName || "Guest"}</Text>
+          <TouchableOpacity
+            onPress={() => setShowSettingsPopup((prev) => !prev)}
+            style={styles.settingsBtn}
+          >
+            <Ionicons name="settings-outline" size={28} color="#fff" />
+          </TouchableOpacity>
+        </View>
+
+        {/* Settings popup menu */}
+        {showSettingsPopup && (
+          <View style={styles.settingsPopup}>
+            <TouchableOpacity
+              style={styles.popupItem}
+              onPress={() => {
+                setShowLogoutConfirm(true);
+              }}
+            >
+              <Text style={styles.popupItemText}>Logout</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
+        {/* Avatar */}
         <View style={styles.avatar}>
           <Text style={styles.avatarText}>{initials || "G"}</Text>
         </View>
 
-        <Text style={styles.username}>{userName || "Guest"}</Text>
-
+        {/* Email */}
         <TextInput
           style={[styles.input, styles.disabledInput]}
-          placeholder="Email"
-          placeholderTextColor="#aaa"
           value={userEmail}
           editable={false}
         />
 
-        <TextInput
-          style={[styles.input, profileExists && styles.disabledInput]}
-          placeholder="Description"
-          placeholderTextColor="#aaa"
-          value={desc}
-          onChangeText={setDesc}
-          editable={!profileExists}
-        />
+        {/* Profile fields */}
+        <EditableInput placeholder="Description" value={desc} onChangeText={setDesc} />
+        <EditableInput placeholder="Age" value={age} keyboardType="numeric" onChangeText={setAge} />
+        <EditableInput placeholder="Role" value={role} onChangeText={setRole} />
 
-        <TextInput
-          style={[styles.input, profileExists && styles.disabledInput]}
-          placeholder="Age"
-          placeholderTextColor="#aaa"
-          value={age}
-          onChangeText={setAge}
-          keyboardType="numeric"
-          editable={!profileExists}
-        />
-
-        <TextInput
-          style={[styles.input, profileExists && styles.disabledInput]}
-          placeholder="Role"
-          placeholderTextColor="#aaa"
-          value={role}
-          onChangeText={setRole}
-          editable={!profileExists}
-        />
-
-        {!profileExists && (
+        {/* Save button */}
+        {(!profileExists || editMode) && (
           <TouchableOpacity style={styles.saveButton} onPress={handleSaveProfile}>
-            <Text style={styles.saveButtonText}>Save Profile</Text>
+            <Text style={styles.saveButtonText}>
+              {profileExists ? "Update Profile" : "Save Profile"}
+            </Text>
           </TouchableOpacity>
         )}
 
-        <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
-          <Text style={styles.logoutButtonText}>Logout</Text>
-        </TouchableOpacity>
+        {/* Blogs */}
+        <View style={styles.BlogContainer}>
+          <Text style={styles.BlogText}>Your Blogs</Text>
+        </View>
       </ScrollView>
 
       <BottomBar />
+
+      {/* Custom Toast Alert */}
+      {alertMessage.length > 0 && (
+        <Animated.View
+          style={[
+            styles.customAlert,
+            {
+              opacity: alertAnim,
+              backgroundColor: alertType === "success" ? "#2ecc71" : "#e74c3c",
+            },
+          ]}
+        >
+          <Text style={styles.customAlertText}>{alertMessage}</Text>
+        </Animated.View>
+      )}
+
+      {/* Logout Confirmation Modal */}
+      {showLogoutConfirm && (
+        <View style={styles.logoutConfirmOverlay}>
+          <View style={styles.logoutConfirmBox}>
+            <Text style={styles.logoutConfirmText}>
+              Are you sure you want to logout?
+            </Text>
+            <View style={styles.logoutButtonsContainer}>
+              <TouchableOpacity style={styles.cancelBtn} onPress={cancelLogout}>
+                <Text style={styles.cancelBtnText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.confirmBtn} onPress={confirmLogout}>
+                <Text style={styles.confirmBtnText}>Logout</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      )}
     </>
   );
 }
@@ -189,10 +275,41 @@ export default function ProfileScreen({ navigation }) {
 const styles = StyleSheet.create({
   container: {
     flexGrow: 1,
-    justifyContent: "center",
     alignItems: "center",
     backgroundColor: "#000",
     padding: 20,
+    justifyContent: "flex-start",
+  },
+  header: {
+    width: "100%",
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginTop: 10,
+    marginBottom: 20,
+  },
+  settingsBtn: {
+    padding: 5,
+  },
+  settingsPopup: {
+    position: "absolute",
+    top: 60,
+    right: 20,
+    backgroundColor: "#111",
+    borderWidth: 1,
+    borderColor: "#222",
+    borderRadius: 10,
+    paddingVertical: 5,
+    width: 120,
+    zIndex: 999,
+  },
+  popupItem: {
+    paddingVertical: 10,
+    paddingHorizontal: 15,
+  },
+  popupItemText: {
+    color: "#fff",
+    fontSize: 16,
   },
   avatar: {
     width: 90,
@@ -213,8 +330,6 @@ const styles = StyleSheet.create({
   username: {
     color: "#fff",
     fontSize: 18,
-    fontWeight: "500",
-    marginBottom: 20,
   },
   input: {
     width: "100%",
@@ -243,22 +358,84 @@ const styles = StyleSheet.create({
     fontWeight: "bold",
     fontSize: 16,
   },
-  logoutButton: {
-    width: "100%",
-    backgroundColor: "#e74c3c",
+  customAlert: {
+    position: "absolute",
+    bottom: 50,
+    left: 20,
+    right: 20,
     padding: 15,
     borderRadius: 10,
     alignItems: "center",
-    marginTop: 15,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 3,
-    elevation: 5,
+    justifyContent: "center",
+    zIndex: 999,
   },
-  logoutButtonText: {
+  customAlertText: {
     color: "#fff",
     fontWeight: "bold",
     fontSize: 16,
+  },
+  logoutConfirmOverlay: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: "rgba(0,0,0,0.6)",
+    justifyContent: "center",
+    alignItems: "center",
+    zIndex: 9999,
+  },
+  logoutConfirmBox: {
+    width: "80%",
+    backgroundColor: "#111",
+    padding: 20,
+    borderRadius: 15,
+    borderWidth: 1,
+    borderColor: "#222",
+    alignItems: "center",
+  },
+  logoutConfirmText: {
+    color: "#fff",
+    fontSize: 16,
+    marginBottom: 20,
+    textAlign: "center",
+  },
+  logoutButtonsContainer: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    width: "100%",
+  },
+  cancelBtn: {
+    flex: 1,
+    backgroundColor: "#555",
+    padding: 12,
+    borderRadius: 10,
+    marginRight: 10,
+    alignItems: "center",
+  },
+  cancelBtnText: {
+    color: "#fff",
+    fontWeight: "bold",
+  },
+  confirmBtn: {
+    flex: 1,
+    backgroundColor: "#e74c3c",
+    padding: 12,
+    borderRadius: 10,
+    alignItems: "center",
+  },
+  confirmBtnText: {
+    color: "#fff",
+    fontWeight: "bold",
+  },
+  BlogContainer: {
+    marginTop: 20,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  BlogText: {
+    color: "white",
+    fontSize: 20,
+    fontWeight: "bold",
   },
 });

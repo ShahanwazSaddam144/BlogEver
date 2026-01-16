@@ -1,7 +1,7 @@
 import { View, Text, StyleSheet, TextInput, TouchableOpacity } from "react-native";
 import { useState } from "react";
 import { StatusBar } from "expo-status-bar";
-import Icon from "react-native-vector-icons/Ionicons";
+import { Ionicons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
 function CustomAlert({ visible, message, onClose }) {
@@ -115,7 +115,7 @@ export default function LoginScreen({ navigation }) {
         />
 
         <TouchableOpacity onPress={() => setShowPassword(!showPassword)}>
-          <Icon
+          <Ionicons
             name={showPassword ? "eye-off-outline" : "eye-outline"}
             size={24}
             color="#aaa"
