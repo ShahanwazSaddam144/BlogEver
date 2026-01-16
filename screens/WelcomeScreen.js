@@ -4,9 +4,14 @@ import { StatusBar } from "expo-status-bar";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
 export default function WelcomeScreen({ navigation }) {
-
+  
   useEffect(() => {
-    checkLogin();
+    const timer = setTimeout(() => {
+      checkLogin();
+    }, 2000);
+
+    
+    return () => clearTimeout(timer);
   }, []);
 
   const checkLogin = async () => {

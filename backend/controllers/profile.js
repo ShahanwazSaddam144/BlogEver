@@ -1,15 +1,16 @@
 const express = require("express");
 const router = express.Router();
 const Profile = require("../Database/profile");
+const jwt = require("jsonwebtoken");
+const authMiddleware = require("../middleware/authMiddleare");
+const JWT_SECRET = process.env.JWT_SECRET || "a1f4b7d8e9c0f2a3b5c6d7e8f9a0b1c2";
 
-/**
- * CREATE PROFILE (ONLY ONCE)
- */
-router.post("/profile", async (req, res) => {
+router.post("/profile", authMiddleware, async (req, res) => {
   try {
-    const { email, desc, age, role } = req.body;
+    const { desc, age, role } = req.body;
+    const email = req.userEmail; 
 
-    if (!email || !desc || !age || !role) {
+    if (!desc || !age || !role) {
       return res.status(400).json({ message: "Please fill all fields" });
     }
 
@@ -27,17 +28,10 @@ router.post("/profile", async (req, res) => {
   }
 });
 
-/**
- * GET PROFILE BY EMAIL
- */
-router.get("/profile", async (req, res) => {
+
+router.get("/profile", authMiddleware, async (req, res) => {
   try {
-    const { email } = req.query;
-
-    if (!email) {
-      return res.status(400).json({ message: "Email is required" });
-    }
-
+    const email = req.userEmail;
     const profile = await Profile.findOne({ email });
     if (!profile) {
       return res.status(404).json({ message: "Profile not found" });
@@ -49,14 +43,13 @@ router.get("/profile", async (req, res) => {
   }
 });
 
-/**
- * UPDATE PROFILE (DESC, AGE, ROLE ONLY)
- */
-router.put("/profile", async (req, res) => {
-  try {
-    const { email, desc, age, role } = req.body;
 
-    if (!email || !desc || !age || !role) {
+router.put("/profile", authMiddleware, async (req, res) => {
+  try {
+    const { desc, age, role } = req.body;
+    const email = req.userEmail;
+
+    if (!desc || !age || !role) {
       return res.status(400).json({ message: "Please fill all fields" });
     }
 

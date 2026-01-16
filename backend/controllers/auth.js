@@ -122,4 +122,27 @@ router.post("/logout", async (req, res) => {
   }
 });
 
+router.delete("/delete-account", async (req, res) => {
+  try {
+    const authHeader = req.headers.authorization;
+    if (!authHeader) return res.status(401).json({ success: false, message: "No token provided" });
+
+    const token = authHeader.split(" ")[1];
+
+    const decoded = jwt.verify(token, JWT_SECRET);
+
+    const user = await User.findOne({ _id: decoded.id, "tokens.token": token });
+    if (!user) return res.status(401).json({ success: false, message: "Invalid token" });
+
+    await User.deleteOne({ _id: decoded.id });
+
+    res.status(200).json({
+      success: true,
+      message: "Account deleted successfully",
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, message: "Server error" });
+  }
+});
+
 module.exports = router;

@@ -5,6 +5,7 @@ const dotenv = require("dotenv");
 const mongoose = require("mongoose");
 const Auth = require("./controllers/auth");
 const Profile = require("./controllers/profile");
+const Blog = require("./controllers/blogs");
 const app = express();
 const port = process.env.PORT || 5000;
 
@@ -27,6 +28,7 @@ dotenv.config();
 // Routes
 app.use('/api/auth', Auth);
 app.use('/api', Profile);
+app.use('/api', Blog);
 
 
 mongoose

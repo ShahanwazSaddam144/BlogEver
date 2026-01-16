@@ -11,6 +11,7 @@ import { useState, useEffect, useRef } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import BottomBar from "../components/BottomBar";
 import { Ionicons } from "@expo/vector-icons";
+import Swiper from "react-native-swiper";
 
 export default function ProfileScreen({ navigation }) {
   const [userName, setUserName] = useState("");
@@ -24,6 +25,10 @@ export default function ProfileScreen({ navigation }) {
   const [profileExists, setProfileExists] = useState(false);
   const [editMode, setEditMode] = useState(false);
 
+  // Blog deletion confirmation
+  const [showDeleteBlogConfirm, setShowDeleteBlogConfirm] = useState(false);
+  const [blogToDelete, setBlogToDelete] = useState(null);
+
   // Custom alert state
   const [alertMessage, setAlertMessage] = useState("");
   const [alertType, setAlertType] = useState("success");
@@ -35,12 +40,21 @@ export default function ProfileScreen({ navigation }) {
   // Logout confirmation
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
 
+  // Delete account confirmation
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+
+  // Blogs state
+  const [blogs, setBlogs] = useState([]);
+
   useEffect(() => {
     getUser();
     loadToken();
   }, []);
 
-  // Custom alert function
+  useEffect(() => {
+    if (userEmail) fetchBlogs();
+  }, [userEmail]);
+
   const showAlert = (message, type = "success") => {
     setAlertMessage(message);
     setAlertType(type);
@@ -59,7 +73,6 @@ export default function ProfileScreen({ navigation }) {
     });
   };
 
-  // Fetch logged-in user from AsyncStorage
   const getUser = async () => {
     try {
       const user = await AsyncStorage.getItem("user");
@@ -83,65 +96,72 @@ export default function ProfileScreen({ navigation }) {
       .map((w) => w[0].toUpperCase())
       .join("") || "";
 
-  const fetchProfile = async (email) => {
-    try {
-      const res = await fetch(
-        `http://192.168.100.77:5000/api/profile?email=${email}`
-      );
-      if (res.ok) {
-        const data = await res.json();
-        setDesc(data.desc);
-        setAge(String(data.age));
-        setRole(data.role);
-        setProfileExists(true);
-        setEditMode(false);
-      } else {
-        setProfileExists(false);
-      }
-    } catch (err) {
-      console.log("Profile fetch error:", err);
+const fetchProfile = async () => {
+  try {
+    const token = await AsyncStorage.getItem("token");
+    if (!token) return;
+
+    const res = await fetch("http://192.168.100.77:5000/api/profile", {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+
+    if (res.ok) {
+      const data = await res.json();
+      setDesc(data.desc);
+      setAge(String(data.age));
+      setRole(data.role);
+      setProfileExists(true);
+      setEditMode(false);
+    } else {
+      setProfileExists(false);
     }
-  };
+  } catch (err) {
+    console.log("Profile fetch error:", err);
+  }
+};
+
 
   const handleSaveProfile = async () => {
-    if (!desc || !age || !role) {
-      showAlert("Please fill all fields", "error");
-      return;
+  if (!desc || !age || !role) {
+    showAlert("Please fill all fields", "error");
+    return;
+  }
+
+  try {
+    const token = await AsyncStorage.getItem("token");
+    if (!token) return showAlert("No token found", "error");
+
+    const res = await fetch("http://192.168.100.77:5000/api/profile", {
+      method: profileExists ? "PUT" : "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ desc, age: Number(age), role }),
+    });
+
+    const data = await res.json();
+
+    if (res.ok) {
+      showAlert(data.message, "success");
+      setProfileExists(true);
+      setEditMode(false);
+    } else {
+      showAlert(data.message || "Failed to save profile", "error");
     }
+  } catch (err) {
+    console.log("Save error:", err);
+    showAlert("Server error", "error");
+  }
+};
 
-    try {
-      const res = await fetch("http://192.168.100.77:5000/api/profile", {
-        method: profileExists ? "PUT" : "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          email: userEmail,
-          desc,
-          age: Number(age),
-          role,
-        }),
-      });
-
-      const data = await res.json();
-
-      if (res.ok) {
-        showAlert(data.message, "success");
-        setProfileExists(true);
-        setEditMode(false);
-      } else {
-        showAlert(data.message || "Failed to save profile", "error");
-      }
-    } catch (err) {
-      console.log("Save error:", err);
-      showAlert("Server error", "error");
-    }
-  };
 
   const loadToken = async () => {
     const token = await AsyncStorage.getItem("token");
     if (!token) navigation.replace("LoginScreen");
   };
 
-  // When Logout is confirmed
+  // Logout functions
   const confirmLogout = async () => {
     setShowLogoutConfirm(false);
     setShowSettingsPopup(false);
@@ -151,32 +171,120 @@ export default function ProfileScreen({ navigation }) {
       navigation.replace("LoginScreen");
     }, 500);
   };
+  const cancelLogout = () => setShowLogoutConfirm(false);
 
-  const cancelLogout = () => {
-    setShowLogoutConfirm(false);
+  // Delete account function
+  const confirmDeleteAccount = async () => {
+    setShowDeleteConfirm(false);
+    setShowSettingsPopup(false);
+    showAlert("Deleting account...", "error");
+
+    try {
+      const token = await AsyncStorage.getItem("token");
+      if (!token) throw new Error("No token found");
+
+      const res = await fetch(
+        "http://192.168.100.77:5000/api/auth/delete-account",
+        {
+          method: "DELETE",
+          headers: { Authorization: `Bearer ${token}` },
+        }
+      );
+
+      const data = await res.json();
+
+      if (res.ok) {
+        await AsyncStorage.multiRemove(["token", "user"]);
+        showAlert("Account deleted successfully", "success");
+        setTimeout(() => {
+          navigation.replace("LoginScreen");
+        }, 1000);
+      } else {
+        showAlert(data.message || "Failed to delete account", "error");
+      }
+    } catch (err) {
+      console.log("Delete account error:", err);
+      showAlert("Server error", "error");
+    }
   };
 
-  const EditableInput = ({ value, onChangeText, placeholder, keyboardType }) => {
-    return (
-      <TextInput
-        style={[styles.input, profileExists && !editMode && styles.disabledInput]}
-        placeholder={placeholder}
-        placeholderTextColor="#aaa"
-        value={value}
-        onChangeText={onChangeText}
-        editable={true}
-        keyboardType={keyboardType || "default"}
-        onFocus={() => {
-          if (profileExists && !editMode) setEditMode(true);
-        }}
-      />
+  const EditableInput = ({ value, onChangeText, placeholder, keyboardType }) => (
+    <TextInput
+      style={[styles.input, profileExists && !editMode && styles.disabledInput]}
+      placeholder={placeholder}
+      placeholderTextColor="#aaa"
+      value={value}
+      onChangeText={onChangeText}
+      editable={true}
+      keyboardType={keyboardType || "default"}
+      onFocus={() => {
+        if (profileExists && !editMode) setEditMode(true);
+      }}
+    />
+  );
+
+const fetchBlogs = async () => {
+  try {
+    const token = await AsyncStorage.getItem("token");
+    if (!token) return;
+
+    const res = await fetch("http://192.168.100.77:5000/api/my-blogs", {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+
+    if (res.ok) {
+      const data = await res.json();
+      setBlogs(data.blogs || []);
+    }
+  } catch (err) {
+    console.log("Fetch blogs error:", err);
+  }
+};
+
+
+  // Trigger the confirmation popup
+  const confirmDeleteBlog = (id) => {
+    setBlogToDelete(id);
+    setShowDeleteBlogConfirm(true);
+  };
+
+const handleDeleteBlog = async () => {
+  if (!blogToDelete) return;
+
+  try {
+    const token = await AsyncStorage.getItem("token");
+    if (!token) return showAlert("No token found", "error");
+
+    const res = await fetch(
+      `http://192.168.100.77:5000/api/my-blogs/${blogToDelete}`,
+      {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}` },
+      }
     );
-  };
+
+    if (res.ok) {
+      showAlert("Blog deleted successfully", "success");
+      fetchBlogs(); 
+    } else {
+      const data = await res.json();
+      showAlert(data.message || "Failed to delete blog", "error");
+    }
+  } catch (err) {
+    console.log("Delete blog error:", err);
+    showAlert("Server error", "error");
+  } finally {
+    setShowDeleteBlogConfirm(false);
+    setBlogToDelete(null);
+  }
+};
+
+
 
   return (
     <>
       <ScrollView contentContainerStyle={styles.container}>
-        {/* Header with settings icon */}
+        {/* Header */}
         <View style={styles.header}>
           <Text style={styles.username}>{userName || "Guest"}</Text>
           <TouchableOpacity
@@ -187,16 +295,23 @@ export default function ProfileScreen({ navigation }) {
           </TouchableOpacity>
         </View>
 
-        {/* Settings popup menu */}
+        {/* Settings popup */}
         {showSettingsPopup && (
           <View style={styles.settingsPopup}>
             <TouchableOpacity
               style={styles.popupItem}
-              onPress={() => {
-                setShowLogoutConfirm(true);
-              }}
+              onPress={() => setShowLogoutConfirm(true)}
             >
               <Text style={styles.popupItemText}>Logout</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.popupItem}
+              onPress={() => setShowDeleteConfirm(true)}
+            >
+              <Text style={[styles.popupItemText, { color: "#e74c3c" }]}>
+                Delete Account
+              </Text>
             </TouchableOpacity>
           </View>
         )}
@@ -227,15 +342,65 @@ export default function ProfileScreen({ navigation }) {
           </TouchableOpacity>
         )}
 
-        {/* Blogs */}
+        {/* Blogs section */}
         <View style={styles.BlogContainer}>
           <Text style={styles.BlogText}>Your Blogs</Text>
+
+          {blogs.length === 0 ? (
+            <Text style={{ color: "#888", marginTop: 10 }}>No blogs yet.</Text>
+          ) : (
+            <View style={{ height: 300, marginTop: 15 }}>
+              <Swiper
+                showsPagination={true}
+                autoplay={false}
+                loop={false}
+                activeDotColor="#2ecc71"
+                dotColor="#555"
+              >
+                {blogs.map((blog) => (
+                  <View
+                    key={blog._id}
+                    style={{
+                      backgroundColor: "#111",
+                      borderRadius: 15,
+                      marginHorizontal: 10,
+                      padding: 15,
+                      flex: 1,
+                      justifyContent: "space-between",
+                    }}
+                  >
+                    <Text style={{ color: "#fff", fontWeight: "bold", fontSize: 16 }}>
+                      {blog.name}
+                    </Text>
+                    <Text style={{ color: "#aaa", marginVertical: 5 }}>{blog.desc}</Text>
+                    <Text style={{ color: "#2ecc71", fontWeight: "bold" }}>{blog.category}</Text>
+                    <Text style={{ color: "#888", fontSize: 12 }}>
+                      {new Date(blog.publishedAt).toDateString()}
+                    </Text>
+
+                    <TouchableOpacity
+                      style={{
+                        marginTop: 10,
+                        backgroundColor: "#e74c3c",
+                        padding: 8,
+                        borderRadius: 10,
+                        alignItems: "center",
+                      }}
+                      onPress={() => confirmDeleteBlog(blog._id)} 
+                    >
+                      <Text style={{ color: "#fff", fontWeight: "bold" }}>Delete</Text>
+                    </TouchableOpacity>
+                  </View>
+                ))}
+              </Swiper>
+            </View>
+          )}
         </View>
       </ScrollView>
 
       <BottomBar />
 
-      {/* Custom Toast Alert */}
+      {/* Custom Alert */}
       {alertMessage.length > 0 && (
         <Animated.View
           style={[
@@ -250,7 +415,7 @@ export default function ProfileScreen({ navigation }) {
         </Animated.View>
       )}
 
-      {/* Logout Confirmation Modal */}
+      {/* Logout Modal */}
       {showLogoutConfirm && (
         <View style={styles.logoutConfirmOverlay}>
           <View style={styles.logoutConfirmBox}>
@@ -268,10 +433,62 @@ export default function ProfileScreen({ navigation }) {
           </View>
         </View>
       )}
+
+      {/* Delete Account Modal */}
+      {showDeleteConfirm && (
+        <View style={styles.logoutConfirmOverlay}>
+          <View style={styles.logoutConfirmBox}>
+            <Text style={styles.logoutConfirmText}>
+              Are you sure you want to delete your account? This action cannot be undone.
+            </Text>
+            <View style={styles.logoutButtonsContainer}>
+              <TouchableOpacity
+                style={styles.cancelBtn}
+                onPress={() => setShowDeleteConfirm(false)}
+              >
+                <Text style={styles.cancelBtnText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.confirmBtn}
+                onPress={confirmDeleteAccount}
+              >
+                <Text style={styles.confirmBtnText}>Delete</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      )}
+
+      {/* Delete Blog Confirmation Modal */}
+      {showDeleteBlogConfirm && (
+        <View style={styles.logoutConfirmOverlay}>
+          <View style={styles.logoutConfirmBox}>
+            <Text style={styles.logoutConfirmText}>
+              Are you sure you want to delete this blog? This action cannot be undone.
+            </Text>
+            <View style={styles.logoutButtonsContainer}>
+              <TouchableOpacity
+                style={styles.cancelBtn}
+                onPress={() => setShowDeleteBlogConfirm(false)}
+              >
+                <Text style={styles.cancelBtnText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.confirmBtn}
+                onPress={handleDeleteBlog}
+              >
+                <Text style={styles.confirmBtnText}>Delete</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      )}
     </>
   );
 }
 
+
+// Styles remain unchanged
 const styles = StyleSheet.create({
   container: {
     flexGrow: 1,
@@ -300,7 +517,7 @@ const styles = StyleSheet.create({
     borderColor: "#222",
     borderRadius: 10,
     paddingVertical: 5,
-    width: 120,
+    width: 140,
     zIndex: 999,
   },
   popupItem: {
