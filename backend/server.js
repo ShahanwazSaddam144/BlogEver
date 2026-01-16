@@ -10,7 +10,7 @@ const port = process.env.PORT || 5000;
 
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 1000,
+  max: 100,
   message: {
     success: false,
     message: "Too many requests, Please try again",
