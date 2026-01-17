@@ -84,13 +84,11 @@ export default function HomeScreen() {
 
   const filterBlogs = () => {
     let temp = [...blogs];
-
     if (selectedCategory !== "All") {
       temp = temp.filter(
         (b) => b.category?.toLowerCase() === selectedCategory.toLowerCase(),
       );
     }
-
     if (blogSearch) {
       temp = temp.filter(
         (b) =>
@@ -98,7 +96,6 @@ export default function HomeScreen() {
           b.desc?.toLowerCase().includes(blogSearch.toLowerCase()),
       );
     }
-
     setFilteredBlogs(temp);
   };
 
@@ -114,13 +111,11 @@ export default function HomeScreen() {
     <>
       <View style={{ flex: 1, backgroundColor: "#000" }}>
         <ScrollView>
-          {/* 🔹 HEADER */}
           <View style={styles.header}>
             <Text style={styles.hello}>Hello, {userName || "Guest"} 👋</Text>
             <Text style={styles.subText}>Explore and interact with users</Text>
           </View>
 
-          {/* 🔹 USERS SEARCH */}
           <Text style={styles.sectionTitle}>All Users</Text>
           <TextInput
             placeholder="Search users..."
@@ -164,7 +159,6 @@ export default function HomeScreen() {
             />
           )}
 
-          {/* 🔹 BLOGS SEARCH + FILTER */}
           <Text style={styles.sectionTitle}>All Blogs</Text>
 
           <TextInput
@@ -208,9 +202,19 @@ export default function HomeScreen() {
               data={filteredBlogs}
               keyExtractor={(item) => item._id}
               style={{ width: "100%", paddingHorizontal: 15, marginTop: 10 }}
-              scrollEnabled={false} // let ScrollView handle scrolling
+              scrollEnabled={false}
               renderItem={({ item }) => (
                 <View style={styles.blogCard}>
+                  <View style={styles.blogAuthorContainer}>
+                    <View style={styles.blogAvatar}>
+                      <Text style={styles.blogAvatarText}>
+                        {getInitials(item.createdby)}
+                      </Text>
+                    </View>
+                    <Text style={styles.blogAuthor}>
+                      {item.createdby || "Unknown"}
+                    </Text>
+                  </View>
                   <Text style={styles.blogTitle}>{item.name}</Text>
                   <Text style={styles.blogDesc}>{item.desc}</Text>
                   <View style={styles.blogFooter}>
@@ -235,11 +239,7 @@ export default function HomeScreen() {
 }
 
 const styles = StyleSheet.create({
-  header: {
-    paddingTop: 45,
-    paddingBottom: 15,
-    alignItems: "center",
-  },
+  header: { paddingTop: 45, paddingBottom: 15, alignItems: "center" },
   hello: { color: "#fff", fontSize: 22, fontWeight: "bold" },
   subText: { color: "#888", fontSize: 13, marginTop: 4 },
   sectionTitle: {
@@ -258,11 +258,7 @@ const styles = StyleSheet.create({
     marginHorizontal: 15,
     marginBottom: 10,
   },
-  userCard: {
-    width: 100,
-    alignItems: "center",
-    marginRight: 15,
-  },
+  userCard: { width: 100, alignItems: "center", marginRight: 15 },
   avatar: {
     width: 60,
     height: 60,
@@ -301,20 +297,32 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     marginBottom: 12,
   },
+  blogAuthorContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 8,
+  },
+  blogAvatar: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    backgroundColor: "#2ecc71",
+    justifyContent: "center",
+    alignItems: "center",
+    marginRight: 8,
+  },
+  blogAvatarText: { color: "#000", fontWeight: "bold", fontSize: 14 },
+  blogAuthor: { color: "#fff", fontWeight: "bold", fontSize: 14 },
   blogTitle: { color: "#fff", fontSize: 16, fontWeight: "bold" },
   blogDesc: { color: "#aaa", marginVertical: 6 },
   blogFooter: { flexDirection: "row", justifyContent: "space-between" },
-  blogCategory: { color: "#2ecc71", fontWeight: "bold", marginLeft: 5 },
-  blogDate: { color: "#777", fontSize: 11 },
   blogcategoryContainer: {
     flexDirection: "row",
-    flexWrap: "wrap", 
-    marginHorizontal: -5, 
+    alignItems: "center",
+    flexWrap: "wrap",
+    marginTop: 4,
   },
-
-  categoryHeading: {
-    color: "#ccc",
-    fontWeight: "bold",
-    marginBottom: 5,
-  },
+  categoryHeading: { color: "#ccc", fontWeight: "bold", marginRight: 5 },
+  blogCategory: { color: "#2ecc71", fontWeight: "bold" },
+  blogDate: { color: "#777", fontSize: 11 },
 });

@@ -120,7 +120,7 @@ export default function AddBlogScreen() {
 
         {/* Author (read-only) */}
         <TextInput
-          style={styles.input}
+          style={[styles.input, {display:"none"}]}
           placeholder="Author"
           placeholderTextColor="#aaa"
           value={createdby}
