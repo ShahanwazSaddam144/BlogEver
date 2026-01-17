@@ -247,6 +247,7 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     padding: 15,
     marginBottom: 15,
+    display:"none",
   },
   datePickerText: {
     color: "#fff",

@@ -1,147 +1,191 @@
-import { View, Text, StyleSheet, TextInput, TouchableOpacity } from "react-native";
+import {
+  View,
+  Text,
+  StyleSheet,
+  TextInput,
+  TouchableOpacity,
+  ActivityIndicator,
+  Modal,
+  Pressable,
+} from "react-native";
 import { useState } from "react";
-import { StatusBar } from "expo-status-bar";
-import { Ionicons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { Ionicons } from "@expo/vector-icons"; // For eye icon
 
-function CustomAlert({ visible, message, onClose }) {
-  if (!visible) return null;
-
-  return (
-    <View style={styles.alertOverlay}>
-      <View style={styles.alertBox}>
-        <Text style={styles.alertText}>{message}</Text>
-        <TouchableOpacity style={styles.alertButton} onPress={onClose}>
-          <Text style={styles.alertButtonText}>OK</Text>
-        </TouchableOpacity>
-      </View>
-    </View>
-  );
-}
-
-export default function LoginScreen({ navigation }) {
+export default function AuthScreen({ navigation }) {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [isLogin, setIsLogin] = useState(true);
+  const [loading, setLoading] = useState(false);
+  const [isSignup, setIsSignup] = useState(true);
   const [showPassword, setShowPassword] = useState(false);
 
-  const [alertVisible, setAlertVisible] = useState(false);
-  const [alertMessage, setAlertMessage] = useState("");
+  // Custom popup
+  const [popupVisible, setPopupVisible] = useState(false);
+  const [popupMessage, setPopupMessage] = useState("");
 
-  const BASE_URL = "http://192.168.100.77:5000/api/auth";
-
-  const showAlert = (msg) => {
-    setAlertMessage(msg);
-    setAlertVisible(true);
+  const showPopup = (message) => {
+    setPopupMessage(message);
+    setPopupVisible(true);
   };
 
-  const handleAuth = async () => {
-    if (!email || !password || (!isLogin && !name)) {
-      showAlert("Please fill all fields");
+  // 🔹 SIGNUP
+  const handleSignup = async () => {
+    if (!name || !email || !password) {
+      showPopup("Please fill all fields");
       return;
     }
 
+    setLoading(true);
     try {
-      const url = isLogin
-        ? `${BASE_URL}/login`
-        : `${BASE_URL}/signIn`;
-
-      const body = isLogin
-        ? { email, password }
-        : { name, email, password };
-
-      const res = await fetch(url, {
+      const res = await fetch("http://192.168.100.77:5000/api/auth/signIn", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
+        body: JSON.stringify({ name, email, password }),
+      });
+      const data = await res.json();
+
+      if (res.status === 201) {
+        showPopup(
+          "Account created! Please check your email and click 'Verify Account' before logging in."
+        );
+        setIsSignup(false);
+        setName("");
+        setPassword("");
+      } else {
+        showPopup(data.message || "Something went wrong");
+      }
+    } catch (err) {
+      showPopup("Server not reachable");
+      console.log(err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // 🔹 LOGIN
+  const handleLogin = async () => {
+    if (!email || !password) {
+      showPopup("Please fill all fields");
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const res = await fetch("http://192.168.100.77:5000/api/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password }),
       });
 
       const data = await res.json();
 
-      if (!res.ok) {
-        showAlert(data.message || "Authentication failed");
-        return;
+      if (res.status === 200) {
+
+        // Save user locally
+        await AsyncStorage.setItem("user", JSON.stringify(data.user));
+        await AsyncStorage.setItem("token", data.token);
+
+        // Navigate to Home
+        navigation.replace("HomeScreen");
+      } else {
+        showPopup(data.message || "Invalid credentials");
       }
-
-      await AsyncStorage.setItem("token", data.token);
-      await AsyncStorage.setItem("user", JSON.stringify(data.user));
-
-      navigation.replace("HomeScreen");
     } catch (err) {
-      showAlert("Server not reachable");
+      showPopup("Server not reachable");
+      console.log(err);
+    } finally {
+      setLoading(false);
     }
   };
 
   return (
     <View style={styles.container}>
-      <StatusBar style="light" />
+      <Text style={styles.title}>{isSignup ? "Sign Up" : "Login"}</Text>
 
-      <Text style={styles.title}>
-        {isLogin ? "Welcome Back" : "Create Account"}
-      </Text>
-
-      <Text style={styles.subtitle}>
-        {isLogin ? "Login to continue" : "Sign up to explore"}
-      </Text>
-
-      {!isLogin && (
+      {isSignup && (
         <TextInput
+          placeholder="Name"
+          placeholderTextColor="#777"
           style={styles.input}
-          placeholder="Full Name"
-          placeholderTextColor="#666"
           value={name}
           onChangeText={setName}
         />
       )}
 
       <TextInput
-        style={styles.input}
         placeholder="Email"
-        placeholderTextColor="#666"
+        placeholderTextColor="#777"
+        style={styles.input}
         value={email}
         onChangeText={setEmail}
-        autoCapitalize="none"
+        keyboardType="email-address"
       />
 
       <View style={styles.passwordContainer}>
         <TextInput
-          style={styles.passwordInput}
           placeholder="Password"
-          placeholderTextColor="#666"
-          secureTextEntry={!showPassword}
+          placeholderTextColor="#777"
+          style={[styles.input, { flex: 1 }]}
           value={password}
+          secureTextEntry={!showPassword}
           onChangeText={setPassword}
         />
-
-        <TouchableOpacity onPress={() => setShowPassword(!showPassword)}>
+        <TouchableOpacity
+          onPress={() => setShowPassword(!showPassword)}
+          style={{ padding: 10 }}
+        >
           <Ionicons
-            name={showPassword ? "eye-off-outline" : "eye-outline"}
-            size={24}
-            color="#aaa"
+            name={showPassword ? "eye-off" : "eye"}
+            size={22}
+            color="#fff"
           />
         </TouchableOpacity>
       </View>
 
-      <TouchableOpacity style={styles.button} onPress={handleAuth}>
-        <Text style={styles.buttonText}>
-          {isLogin ? "Login" : "Sign Up"}
+      <TouchableOpacity
+        style={styles.button}
+        onPress={isSignup ? handleSignup : handleLogin}
+      >
+        {loading ? (
+          <ActivityIndicator color="#000" />
+        ) : (
+          <Text style={styles.buttonText}>
+            {isSignup ? "Sign Up" : "Login"}
+          </Text>
+        )}
+      </TouchableOpacity>
+
+      <TouchableOpacity
+        onPress={() => setIsSignup(!isSignup)}
+        style={{ marginTop: 15 }}
+      >
+        <Text style={styles.toggleText}>
+          {isSignup
+            ? "Already have an account? Login"
+            : "Don't have an account? Sign Up"}
         </Text>
       </TouchableOpacity>
 
-      <TouchableOpacity onPress={() => setIsLogin(!isLogin)}>
-        <Text style={styles.switchText}>
-          {isLogin
-            ? "Don't have an account? Create one"
-            : "Already have an account? Login"}
-        </Text>
-      </TouchableOpacity>
-
-      <CustomAlert
-        visible={alertVisible}
-        message={alertMessage}
-        onClose={() => setAlertVisible(false)}
-      />
+      {/* Custom Popup Modal */}
+      <Modal
+        transparent
+        visible={popupVisible}
+        animationType="fade"
+        onRequestClose={() => setPopupVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContainer}>
+            <Text style={styles.modalText}>{popupMessage}</Text>
+            <Pressable
+              style={styles.modalButton}
+              onPress={() => setPopupVisible(false)}
+            >
+              <Text style={styles.modalButtonText}>OK</Text>
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -150,72 +194,57 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: "#000",
-    alignItems: "center",
     justifyContent: "center",
-    paddingHorizontal: 30,
+    padding: 20,
   },
-  title: { color: "#fff", fontSize: 28, fontWeight: "bold" },
-  subtitle: { color: "#aaa", marginTop: 8, marginBottom: 20 },
-  input: {
-    width: "100%",
-    backgroundColor: "#111",
-    borderColor: "#222",
-    borderWidth: 1,
-    borderRadius: 10,
-    padding: 15,
+  title: {
     color: "#fff",
+    fontSize: 28,
+    fontWeight: "bold",
+    marginBottom: 20,
+    textAlign: "center",
+  },
+  input: {
+    backgroundColor: "#111",
+    color: "#fff",
+    padding: 12,
+    borderRadius: 10,
     marginBottom: 15,
   },
   passwordContainer: {
     flexDirection: "row",
-    width: "100%",
-    backgroundColor: "#111",
-    borderColor: "#222",
-    borderWidth: 1,
-    borderRadius: 10,
-    paddingHorizontal: 15,
     alignItems: "center",
+    backgroundColor: "#111",
+    borderRadius: 10,
     marginBottom: 15,
   },
-  passwordInput: { flex: 1, color: "#fff", paddingVertical: 15 },
   button: {
-    width: "100%",
-    backgroundColor: "#fff",
+    backgroundColor: "#2ecc71",
     padding: 15,
     borderRadius: 10,
     alignItems: "center",
-    marginTop: 10,
   },
-  buttonText: { color: "#000", fontWeight: "bold", fontSize: 16 },
-  switchText: { color: "#888", marginTop: 20, fontSize: 13 },
-  alertOverlay: {
-    position: "absolute",
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
+  buttonText: { color: "#000", fontSize: 16, fontWeight: "bold" },
+  toggleText: { color: "#888", textAlign: "center" },
+  modalOverlay: {
+    flex: 1,
     backgroundColor: "rgba(0,0,0,0.7)",
     justifyContent: "center",
     alignItems: "center",
   },
-  alertBox: {
-    width: "80%",
+  modalContainer: {
     backgroundColor: "#111",
+    padding: 25,
     borderRadius: 12,
-    padding: 20,
+    width: "80%",
     alignItems: "center",
   },
-  alertText: {
-    color: "#fff",
-    fontSize: 15,
-    textAlign: "center",
-    marginBottom: 15,
-  },
-  alertButton: {
-    backgroundColor: "#fff",
+  modalText: { color: "#fff", fontSize: 16, textAlign: "center", marginBottom: 15 },
+  modalButton: {
+    backgroundColor: "#2ecc71",
     paddingVertical: 10,
-    paddingHorizontal: 30,
+    paddingHorizontal: 25,
     borderRadius: 8,
   },
-  alertButtonText: { color: "#000", fontWeight: "bold" },
+  modalButtonText: { color: "#000", fontWeight: "bold" },
 });
