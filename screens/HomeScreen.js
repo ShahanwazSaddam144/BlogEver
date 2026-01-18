@@ -12,7 +12,7 @@ import { useEffect, useState } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import BottomBar from "../components/BottomBar";
 
-export default function HomeScreen() {
+export default function HomeScreen({ navigation }) {
   const [userName, setUserName] = useState("");
 
   const [users, setUsers] = useState([]);
@@ -111,12 +111,15 @@ export default function HomeScreen() {
     <>
       <View style={{ flex: 1, backgroundColor: "#000" }}>
         <ScrollView>
+          {/* HEADER */}
           <View style={styles.header}>
             <Text style={styles.hello}>Hello, {userName || "Guest"} 👋</Text>
             <Text style={styles.subText}>Explore and interact with users</Text>
           </View>
 
+          {/* USERS */}
           <Text style={styles.sectionTitle}>All Users</Text>
+
           <TextInput
             placeholder="Search users..."
             placeholderTextColor="#777"
@@ -127,25 +130,23 @@ export default function HomeScreen() {
 
           {usersLoading ? (
             <ActivityIndicator color="#2ecc71" />
-          ) : filteredUsers.length === 0 ? (
-            <Text style={{ color: "#777", marginLeft: 15, marginTop: 10 }}>
-              No users found
-            </Text>
           ) : (
             <FlatList
               data={filteredUsers}
               horizontal
               showsHorizontalScrollIndicator={false}
               keyExtractor={(item) => item._id}
-              contentContainerStyle={{
-                paddingHorizontal: 15,
-                marginBottom: 20,
-              }}
-              pagingEnabled={filteredUsers.length > 3}
-              snapToAlignment="start"
-              decelerationRate={filteredUsers.length > 3 ? "fast" : "normal"}
+              contentContainerStyle={{ paddingHorizontal: 15 }}
               renderItem={({ item }) => (
-                <TouchableOpacity style={styles.userCard}>
+                <TouchableOpacity
+                  style={styles.userCard}
+                  onPress={() =>
+                    navigation.navigate("userProfileScreen", {
+                      email: item.email,
+                      name: item.name,
+                    })
+                  }
+                >
                   <View style={styles.avatar}>
                     <Text style={styles.avatarText}>
                       {getInitials(item.name)}
@@ -159,6 +160,7 @@ export default function HomeScreen() {
             />
           )}
 
+          {/* BLOGS */}
           <Text style={styles.sectionTitle}>All Blogs</Text>
 
           <TextInput
@@ -194,15 +196,15 @@ export default function HomeScreen() {
           {loading ? (
             <ActivityIndicator size="large" color="#2ecc71" />
           ) : filteredBlogs.length === 0 ? (
-            <Text style={{ color: "#777", marginTop: 20, marginLeft: 15 }}>
+            <Text style={{ color: "#777", marginLeft: 15 }}>
               No blogs found
             </Text>
           ) : (
             <FlatList
               data={filteredBlogs}
               keyExtractor={(item) => item._id}
-              style={{ width: "100%", paddingHorizontal: 15, marginTop: 10 }}
               scrollEnabled={false}
+              style={{ paddingHorizontal: 15 }}
               renderItem={({ item }) => (
                 <View style={styles.blogCard}>
                   <View style={styles.blogAuthorContainer}>
@@ -215,8 +217,30 @@ export default function HomeScreen() {
                       {item.createdby || "Unknown"}
                     </Text>
                   </View>
+
                   <Text style={styles.blogTitle}>{item.name}</Text>
-                  <Text style={styles.blogDesc}>{item.desc}</Text>
+
+                  {/* Truncated Description */}
+                  <Text
+                    numberOfLines={5}
+                    ellipsizeMode="tail"
+                    style={styles.blogDesc}
+                  >
+                    {item.desc}
+                  </Text>
+
+                  <TouchableOpacity
+                    onPress={() =>
+                      navigation.navigate("FullBlogScreen", {
+                        blogId: item._id,
+                      })
+                    }
+                  >
+                    <Text style={{ color: "#2ecc71", marginTop: 5 }}>
+                      Read more
+                    </Text>
+                  </TouchableOpacity>
+
                   <View style={styles.blogFooter}>
                     <View style={styles.blogcategoryContainer}>
                       <Text style={styles.categoryHeading}>Category:</Text>

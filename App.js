@@ -6,6 +6,8 @@ import LoginScreen from './screens/LoginScreen';
 import HomeScreen from './screens/HomeScreen';
 import ProfileScreen from './screens/ProfileScreen';
 import AddBlogScreen from './screens/AddBlogScreen';
+import UserProfileScreen from './screens/userProfileScreen';
+import FullBlogScreen from './screens/FullBlogScreen';
 
 const Stack = createNativeStackNavigator();
 
@@ -18,6 +20,8 @@ export default function App() {
         <Stack.Screen name="HomeScreen" component={HomeScreen} />
         <Stack.Screen name="ProfileScreen" component={ProfileScreen} />
         <Stack.Screen name="AddBlogScreen" component={AddBlogScreen} />
+        <Stack.Screen name="userProfileScreen" component={UserProfileScreen} />
+        <Stack.Screen name="FullBlogScreen" component={FullBlogScreen} />
       </Stack.Navigator> 
     </NavigationContainer>
   );

@@ -2,6 +2,7 @@ const express = require("express");
 const Blog = require("../Database/blogs");
 const jwt = require("jsonwebtoken");
 const authMiddleware = require("../middleware/authMiddleare");
+const blogs = require("../Database/blogs");
 
 const router = express.Router();
 const JWT_SECRET = process.env.JWT_SECRET || "a1f4b7d8e9c0f2a3b5c6d7e8f9a0b1c2";
@@ -50,6 +51,25 @@ router.get("/my-blogs", async (req, res) => {
 });
 
 
+router.get("/blogs/:email", async (req, res) => {
+  try {
+    const { email } = req.params;
+
+    const blogs = await Blog.find({ email }); 
+
+    if (!blogs || blogs.length === 0) {
+      return res.status(404).json({ message: "No blogs found" });
+    }
+
+    res.status(200).json({ blogs }); 
+  } catch (err) {
+    console.log("Server error:", err);
+    res.status(500).json({ message: "Server Error" });
+  }
+});
+
+
+
 router.get("/blogs", async (req, res) => {
   try {
     const blogs = await Blog.find().sort({ publishedAt: -1 });
@@ -59,7 +79,6 @@ router.get("/blogs", async (req, res) => {
     res.status(500).json({ message: "Server error" });
   }
 });
-
 
 router.delete("/my-blogs/:id", authMiddleware, async (req, res) => {
   try {
@@ -77,6 +96,18 @@ router.delete("/my-blogs/:id", authMiddleware, async (req, res) => {
     res.status(500).json({ message: "Server error" });
   }
 });
+
+router.get("/blog/:id", async (req, res) => {
+  try {
+    const blog = await Blog.findById(req.params.id);
+    if (!blog) return res.status(404).json({ message: "Blog not found" });
+    res.status(200).json(blog);
+  } catch (err) {
+    console.log(err);
+    res.status(500).json({ message: "Server error" });
+  }
+});
+
 
 
 module.exports = router;
