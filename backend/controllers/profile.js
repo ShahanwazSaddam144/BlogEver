@@ -32,7 +32,7 @@ router.post("/profile", authMiddleware, async (req, res) => {
 router.get("/profile", authMiddleware, async (req, res) => {
   try {
     const email = req.userEmail;
-    const profile = await Profile.findOne({ email });
+    const profile = await Profile.findOne({ email }).limit(100);
     if (!profile) {
       return res.status(404).json({ message: "Profile not found" });
     }

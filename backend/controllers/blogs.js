@@ -8,6 +8,7 @@ const router = express.Router();
 const JWT_SECRET = process.env.JWT_SECRET || "a1f4b7d8e9c0f2a3b5c6d7e8f9a0b1c2";
 
 
+// Fo Sending or Creating Blogs
 router.post("/blogs", async (req, res) => {
   try {
     const token = req.headers.authorization?.split(" ")[1];
@@ -33,6 +34,7 @@ router.post("/blogs", async (req, res) => {
   }
 });
 
+// For User Accounts
 
 router.get("/my-blogs", async (req, res) => {
   try {
@@ -50,8 +52,8 @@ router.get("/my-blogs", async (req, res) => {
   }
 });
 
-
-router.get("/blogs/:email", async (req, res) => {
+// To fetch blogs according to Email of user
+router.get("/blogs/by-email/:email", async (req, res) => {
   try {
     const { email } = req.params;
 
@@ -68,11 +70,10 @@ router.get("/blogs/:email", async (req, res) => {
   }
 });
 
-
-
+// To get All Blogs
 router.get("/blogs", async (req, res) => {
   try {
-    const blogs = await Blog.find().sort({ publishedAt: -1 });
+    const blogs = await Blog.find().sort({ publishedAt: 1 }).limit(100);
     res.status(200).json({ blogs });
   } catch (err) {
     console.log("Fetch blogs error:", err);
@@ -80,6 +81,7 @@ router.get("/blogs", async (req, res) => {
   }
 });
 
+//For Deleting User Blogs by ID
 router.delete("/my-blogs/:id", authMiddleware, async (req, res) => {
   try {
     const { id } = req.params;
@@ -97,6 +99,21 @@ router.delete("/my-blogs/:id", authMiddleware, async (req, res) => {
   }
 });
 
+// For Full Blog Screen
+router.get("/blogs/:id", async (req, res) => {
+  try {
+    const blog = await Blog.findById(req.params.id);
+
+    if (!blog) {
+      return res.status(404).json({ message: "Blog not found" });
+    }
+
+    res.status(200).json({ blog });
+  } catch (err) {
+    console.log("Fetch single blog error:", err);
+    res.status(500).json({ message: "Server error" });
+  }
+});
 
 
 module.exports = router;

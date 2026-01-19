@@ -50,7 +50,7 @@ export default function UserProfileScreen({ route }) {
   // Fetch blogs by this user
   const fetchUserBlogs = async () => {
     try {
-      const res = await fetch(`http://192.168.100.77:5000/api/blogs/${email}`);
+      const res = await fetch(`http://192.168.100.77:5000/api/blogs/by-email/${email}`);
       if (!res.ok) throw new Error("Blogs not found");
 
       const data = await res.json();

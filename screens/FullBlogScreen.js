@@ -1,23 +1,42 @@
-import { View, Text, StyleSheet, ActivityIndicator, ScrollView } from "react-native";
+import {
+  View,
+  Text,
+  StyleSheet,
+  ActivityIndicator,
+  ScrollView,
+} from "react-native";
 import { useEffect, useState } from "react";
 import BottomBar from "../components/BottomBar";
 
 export default function FullBlogScreen({ route }) {
   const { blogId } = route.params;
+
   const [blog, setBlog] = useState(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetchBlog();
-  }, []);
+    if (blogId) {
+      fetchBlog();
+    }
+  }, [blogId]);
 
   const fetchBlog = async () => {
     try {
-      const res = await fetch(`http://192.168.100.77:5000/api/blogs/${blogId}`);
+      const res = await fetch(
+        `http://192.168.100.77:5000/api/blogs/${blogId}`
+      );
+
+      if (!res.ok) {
+        throw new Error("Blog not found");
+      }
+
       const data = await res.json();
-      setBlog(data.blog || data); 
+
+      // backend returns { blog }
+      setBlog(data.blog);
     } catch (err) {
-      console.log("Fetch blog error:", err);
+      console.log("Fetch blog error:", err.message);
+      setBlog(null);
     } finally {
       setLoading(false);
     }
@@ -41,30 +60,38 @@ export default function FullBlogScreen({ route }) {
 
   return (
     <>
-    <ScrollView style={styles.container} contentContainerStyle={{ paddingBottom: 30 }}>
-      {/* Blog Title */}
-      <Text style={styles.blogTitle}>{blog.name}</Text>
+      <ScrollView
+        style={styles.container}
+        contentContainerStyle={{ paddingBottom: 30 }}
+      >
+        {/* Blog Title */}
+        <Text style={styles.blogTitle}>{blog.name}</Text>
 
-      {/* Author & Date */}
-      <View style={styles.blogMeta}>
-        <Text style={styles.blogAuthor}>By {blog.createdby || "Unknown"}</Text>
-        <Text style={styles.blogDate}>
-          {new Date(blog.publishedAt).toDateString()}
-        </Text>
-      </View>
-
-      {/* Category */}
-      {blog.category && (
-        <View style={styles.blogCategoryContainer}>
-          <Text style={styles.categoryLabel}>Category:</Text>
-          <Text style={styles.blogCategory}>{blog.category}</Text>
+        {/* Author & Date */}
+        <View style={styles.blogMeta}>
+          <Text style={styles.blogAuthor}>
+            By {blog.createdby || "Unknown"}
+          </Text>
+          <Text style={styles.blogDate}>
+            {blog.publishedAt
+              ? new Date(blog.publishedAt).toDateString()
+              : ""}
+          </Text>
         </View>
-      )}
 
-      {/* Description */}
-      <Text style={styles.blogDesc}>{blog.desc}</Text>
-    </ScrollView>
-    <BottomBar />
+        {/* Category */}
+        {blog.category && (
+          <View style={styles.blogCategoryContainer}>
+            <Text style={styles.categoryLabel}>Category:</Text>
+            <Text style={styles.blogCategory}>{blog.category}</Text>
+          </View>
+        )}
+
+        {/* Full Description */}
+        <Text style={styles.blogDesc}>{blog.desc}</Text>
+      </ScrollView>
+
+      <BottomBar />
     </>
   );
 }
