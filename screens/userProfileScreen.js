@@ -127,7 +127,8 @@ export default function UserProfileScreen({ route }) {
             renderItem={({ item }) => (
               <View style={styles.blogCard}>
                 <Text style={styles.blogName}>{item.name}</Text>
-                <Text style={styles.blogDesc}>{item.desc}</Text>
+                <Text style={styles.blogDesc} numberOfLines={5} ellipsizeMode="tail">
+                  {item.desc}</Text>
 
                 <View style={styles.blogFooter}>
                   <View style={styles.blogcategoryContainer}>

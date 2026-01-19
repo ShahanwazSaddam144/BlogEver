@@ -390,7 +390,7 @@ export default function ProfileScreen({ navigation }) {
                     >
                       {blog.name}
                     </Text>
-                    <Text style={{ color: "#aaa", marginVertical: 5 }}>
+                    <Text style={{ color: "#aaa", marginVertical: 5 }} numberOfLines={5} ellipsizeMode="tail">
                       {blog.desc}
                     </Text>
                     <View style={styles.blogcategoryContainer}>
