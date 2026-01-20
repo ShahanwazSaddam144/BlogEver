@@ -41,7 +41,7 @@ app.listen(port, (err) => {
     console.log("❌❌ Error Connecting Server");
   } else {
     console.log(
-      `✅✅ Server Running Successfully http://192.168.100.77:${port}`
+      `✅✅ Server Running Successfully http://localhost:${port}`
     );
   }
 });
