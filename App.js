@@ -8,6 +8,7 @@ import ProfileScreen from './screens/ProfileScreen';
 import AddBlogScreen from './screens/AddBlogScreen';
 import UserProfileScreen from './screens/userProfileScreen';
 import FullBlogScreen from './screens/FullBlogScreen';
+import NotificationScreen from './screens/NotificationScreen';
 
 const Stack = createNativeStackNavigator();
 
@@ -22,6 +23,7 @@ export default function App() {
         <Stack.Screen name="AddBlogScreen" component={AddBlogScreen} />
         <Stack.Screen name="userProfileScreen" component={UserProfileScreen} />
         <Stack.Screen name="FullBlogScreen" component={FullBlogScreen} />
+        <Stack.Screen name="NotificationScreen" component={NotificationScreen} />
       </Stack.Navigator> 
     </NavigationContainer>
   );
