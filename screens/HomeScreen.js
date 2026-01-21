@@ -45,7 +45,7 @@ export default function HomeScreen({ navigation }) {
   const fetchAllUsers = async () => {
     try {
       setUsersLoading(true);
-      const res = await fetch("http://192.168.100.77:5000/api/auth/users");
+      const res = await fetch("http://localhost:3000/api/auth/users");
       const data = await res.json();
       setUsers(data.userAccounts || []);
       setFilteredUsers(data.userAccounts || []);
@@ -60,7 +60,7 @@ export default function HomeScreen({ navigation }) {
   const fetchAllBlogs = async () => {
     try {
       setLoading(true);
-      const res = await fetch("http://192.168.100.77:5000/api/blogs");
+      const res = await fetch("http://localhost:3000/api/blogs");
       const data = await res.json();
       setBlogs(data.blogs || []);
       setFilteredBlogs(data.blogs || []);

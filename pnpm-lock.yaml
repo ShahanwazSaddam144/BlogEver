@@ -17,6 +17,9 @@ importers:
       '@react-native-community/datetimepicker':
         specifier: ^8.6.0
         version: 8.6.0(expo@54.0.31(@babel/core@7.28.6)(react-native@0.83.1(@babel/core@7.28.6)(react@19.2.3))(react@19.2.3))(react-native@0.83.1(@babel/core@7.28.6)(react@19.2.3))(react@19.2.3)
+      '@react-native-community/hooks':
+        specifier: ^100.1.0
+        version: 100.1.0(react-native@0.83.1(@babel/core@7.28.6)(react@19.2.3))(react@19.2.3)
       '@react-navigation/native':
         specifier: ^7.1.28
         version: 7.1.28(react-native@0.83.1(@babel/core@7.28.6)(react@19.2.3))(react@19.2.3)
@@ -789,6 +792,12 @@ packages:
         optional: true
       react-native-windows:
         optional: true
+
+  '@react-native-community/hooks@100.1.0':
+    resolution: {integrity: sha512-aXESGr6WcnwyeIl+SiCLNFpbApzTmupyYzm2OkGjMuwHr42+a3G65xxTxN/xHuNdTVWO0dXbOwyLgEkQ0i/qZg==}
+    peerDependencies:
+      react: '>=18.0.0'
+      react-native: '>=0.70'
 
   '@react-native-picker/picker@2.11.4':
     resolution: {integrity: sha512-Kf8h1AMnBo54b1fdiVylP2P/iFcZqzpMYcglC28EEFB1DEnOjsNr6Ucqc+3R9e91vHxEDnhZFbYDmAe79P2gjA==}
@@ -4172,6 +4181,11 @@ snapshots:
       react-native: 0.83.1(@babel/core@7.28.6)(react@19.2.3)
     optionalDependencies:
       expo: 54.0.31(@babel/core@7.28.6)(react-native@0.83.1(@babel/core@7.28.6)(react@19.2.3))(react@19.2.3)
+
+  '@react-native-community/hooks@100.1.0(react-native@0.83.1(@babel/core@7.28.6)(react@19.2.3))(react@19.2.3)':
+    dependencies:
+      react: 19.2.3
+      react-native: 0.83.1(@babel/core@7.28.6)(react@19.2.3)
 
   '@react-native-picker/picker@2.11.4(react-native@0.83.1(@babel/core@7.28.6)(react@19.2.3))(react@19.2.3)':
     dependencies:
