@@ -11,6 +11,7 @@ import {
 import { useEffect, useState } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import BottomBar from "../components/BottomBar";
+import Notifications from "../components/Notifications";
 
 export default function HomeScreen({ navigation }) {
   const [userName, setUserName] = useState("");
@@ -109,6 +110,7 @@ export default function HomeScreen({ navigation }) {
 
   return (
     <>
+    <Notifications />
       <View style={{ flex: 1, backgroundColor: "#000" }}>
         <ScrollView>
           {/* HEADER */}
@@ -263,7 +265,7 @@ export default function HomeScreen({ navigation }) {
 }
 
 const styles = StyleSheet.create({
-  header: { paddingTop: 45, paddingBottom: 15, alignItems: "center" },
+  header: { paddingTop: 45, paddingBottom: 15, alignItems: "center", marginTop: 25, },
   hello: { color: "#fff", fontSize: 22, fontWeight: "bold" },
   subText: { color: "#888", fontSize: 13, marginTop: 4 },
   sectionTitle: {

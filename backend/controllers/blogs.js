@@ -73,7 +73,7 @@ router.get("/blogs/by-email/:email", async (req, res) => {
 // To get All Blogs
 router.get("/blogs", async (req, res) => {
   try {
-    const blogs = await Blog.find().sort({ publishedAt: 1 }).limit(100);
+    const blogs = await Blog.find().sort({ publishedAt: -1 }).limit(100);
     res.status(200).json({ blogs });
   } catch (err) {
     console.log("Fetch blogs error:", err);
