@@ -39,7 +39,7 @@ export async function secureFetch(url, options = {}) {
       const refreshToken = await SecureStore.getItemAsync('refreshToken');
 
       // Call refresh endpoint
-      const response = await fetch('https://api.example.com/refresh', {
+      const response = await fetch('http://localhost:3000/api/authrefresh', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ refreshToken }),

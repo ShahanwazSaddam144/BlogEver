@@ -13,7 +13,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as SecureStore from "expo-secure-store";
 import BottomBar from "../components/BottomBar";
 import Notifications from "../components/Notifications";
-import { set } from "mongoose";
+import { secureFetch } from "../src/api/apiClient";
 
 export default function HomeScreen({ navigation }) {
   const [userName, setUserName] = useState("");
@@ -73,14 +73,13 @@ export default function HomeScreen({ navigation }) {
   const fetchAllUsers = async () => {
     try {
       setUsersLoading(true);
-      const res = await fetch("http://localhost:3000/api/auth/users", {
+      const res = await secureFetch("http://localhost:3000/api/auth/users", {
         method: "GET",
         headers: {
-          Authorization: `Bearer ${accessToken}`,
-          "refreshToken": refreshToken,
           "Content-Type": "application/json",
         },
       });
+
       const data = await res.json();
       setUsers(data.userAccounts || []);
       setFilteredUsers(data.userAccounts || []);
@@ -95,7 +94,12 @@ export default function HomeScreen({ navigation }) {
   const fetchAllBlogs = async () => {
     try {
       setLoading(true);
-      const res = await fetch("http://localhost:3000/api/blogs");
+      const res = await secureFetch("http://localhost:3000/api/blogs", {
+        method:"GET",
+        headers: {
+          "Content-Type": "application/json",
+        },
+      })
       const data = await res.json();
       setBlogs(data.blogs || []);
       setFilteredBlogs(data.blogs || []);
