@@ -30,7 +30,7 @@ export default function HomeScreen({ navigation }) {
   const [selectedCategory, setSelectedCategory] = useState("All");
   const categories = ["All", "Coding", "Fun", "Entertainment", "Other"];
 
-  const [authToken, setAuthToken] = useState(null);
+  const [accessToken, setaccessToken] = useState(null);
   const [refreshToken, setRefreshToken] = useState(null);
   const [users, setUsers] = useState([]);
 
@@ -38,11 +38,11 @@ export default function HomeScreen({ navigation }) {
     {
       try {
         const refreshToken = await SecureStore.getItemAsync("refreshToken");
-        const authToken = await SecureStore.getItemAsync("authToken");
+        const accessToken = await SecureStore.getItemAsync("accessToken");
         const user = await SecureStore.getItemAsync("user");
-        if (refreshToken && authToken && user) {
+        if (refreshToken && accessToken && user) {
           setRefreshToken(refreshToken);
-          setAuthToken(authToken);
+          setaccessToken(accessToken);
           setUsers(JSON.parse(user));
         } else {
           navigation.replace("LoginScreen?reason=missing_data");
@@ -76,7 +76,7 @@ export default function HomeScreen({ navigation }) {
       const res = await fetch("http://localhost:3000/api/auth/users", {
         method: "GET",
         headers: {
-          Authorization: `Bearer ${authToken}`,
+          Authorization: `Bearer ${accessToken}`,
           "refreshToken": refreshToken,
           "Content-Type": "application/json",
         },

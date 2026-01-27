@@ -80,9 +80,9 @@ export default function AuthScreen({ navigation }) {
       const data = await res.json();
 
       if (res.status === 200) {
-        const {user,authToken,refreshToken}=data;
+        const {user,accessToken,refreshToken}=data;
         await SecureStore.setItemAsync("user", JSON.stringify(user));
-        await SecureStore.setItemAsync("authToken", authToken);
+        await SecureStore.setItemAsync("accessToken", accessToken);
         await SecureStore.setItemAsync("refreshToken", refreshToken);
         navigation.replace("HomeScreen");
       } else {
