@@ -9,8 +9,8 @@ import {
   Pressable,
 } from "react-native";
 import { useState } from "react";
-import AsyncStorage from "@react-native-async-storage/async-storage";
-import { Ionicons } from "@expo/vector-icons"; // For eye icon
+import * as SecureStore from 'expo-secure-store';
+import { Ionicons } from "@expo/vector-icons";
 
 export default function AuthScreen({ navigation }) {
   const [name, setName] = useState("");
@@ -29,7 +29,6 @@ export default function AuthScreen({ navigation }) {
     setPopupVisible(true);
   };
 
-  // 🔹 SIGNUP
   const handleSignup = async () => {
     if (!name || !email || !password) {
       showPopup("Please fill all fields");
@@ -81,12 +80,10 @@ export default function AuthScreen({ navigation }) {
       const data = await res.json();
 
       if (res.status === 200) {
-
-        // Save user locally
-        await AsyncStorage.setItem("user", JSON.stringify(data.user));
-        await AsyncStorage.setItem("token", data.token);
-
-        // Navigate to Home
+        const {user,authToken,refreshToken}=data;
+        await SecureStore.setItemAsync("user", JSON.stringify(user));
+        await SecureStore.setItemAsync("authToken", authToken);
+        await SecureStore.setItemAsync("refreshToken", refreshToken);
         navigation.replace("HomeScreen");
       } else {
         showPopup(data.message || "Invalid credentials");
