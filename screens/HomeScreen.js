@@ -13,7 +13,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as SecureStore from "expo-secure-store";
 import BottomBar from "../components/BottomBar";
 import Notifications from "../components/Notifications";
-import { secureFetch } from "../src/api/apiClient";
+import { secureFetch } from "api/apiClient";
 
 export default function HomeScreen({ navigation }) {
   const [userName, setUserName] = useState("");
@@ -30,31 +30,7 @@ export default function HomeScreen({ navigation }) {
   const [selectedCategory, setSelectedCategory] = useState("All");
   const categories = ["All", "Coding", "Fun", "Entertainment", "Other"];
 
-  const [accessToken, setaccessToken] = useState(null);
-  const [refreshToken, setRefreshToken] = useState(null);
   const [users, setUsers] = useState([]);
-
-  useEffect(async () => {
-    {
-      try {
-        const refreshToken = await SecureStore.getItemAsync("refreshToken");
-        const accessToken = await SecureStore.getItemAsync("accessToken");
-        const user = await SecureStore.getItemAsync("user");
-        if (refreshToken && accessToken && user) {
-          setRefreshToken(refreshToken);
-          setaccessToken(accessToken);
-          setUsers(JSON.parse(user));
-        } else {
-          navigation.replace("LoginScreen?reason=missing_data");
-          return null;
-        }
-      } catch (error) {
-        console.error("Error retrieving token", error);
-        navigation.replace("LoginScreen?reason=error");
-        return null;
-      }
-    }
-  }, []);
 
   useEffect(() => {
     getUser();
