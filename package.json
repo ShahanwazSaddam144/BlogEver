@@ -27,6 +27,7 @@
     "expo-status-bar": "~3.0.9",
     "express": "^5.2.1",
     "express-rate-limit": "^8.2.1",
+    "hljs": "link:react-syntax-highlighter/styles/hljs",
     "jsonwebtoken": "^9.0.3",
     "jwt-decode": "^4.0.0",
     "mongoose": "^9.1.5",
@@ -40,6 +41,7 @@
     "react-native-safe-area-context": "~5.6.2",
     "react-native-screens": "~4.20.0",
     "react-native-swiper": "^1.6.0",
+    "react-native-syntax-highlighter": "^2.1.0",
     "react-native-vector-icons": "^10.3.0",
     "react-native-web": "~0.21.2"
   },
