@@ -10,13 +10,14 @@ import {
 } from "react-native";
 import { useEffect, useState } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import * as SecureStore from "expo-secure-store";
 import BottomBar from "../components/BottomBar";
 import Notifications from "../components/Notifications";
+import { set } from "mongoose";
 
 export default function HomeScreen({ navigation }) {
   const [userName, setUserName] = useState("");
 
-  const [users, setUsers] = useState([]);
   const [filteredUsers, setFilteredUsers] = useState([]);
   const [usersLoading, setUsersLoading] = useState(true);
 
@@ -28,6 +29,32 @@ export default function HomeScreen({ navigation }) {
   const [blogSearch, setBlogSearch] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("All");
   const categories = ["All", "Coding", "Fun", "Entertainment", "Other"];
+
+  const [authToken, setAuthToken] = useState(null);
+  const [refreshToken, setRefreshToken] = useState(null);
+  const [users, setUsers] = useState([]);
+
+  useEffect(async () => {
+    {
+      try {
+        const refreshToken = await SecureStore.getItemAsync("refreshToken");
+        const authToken = await SecureStore.getItemAsync("authToken");
+        const user = await SecureStore.getItemAsync("user");
+        if (refreshToken && authToken && user) {
+          setRefreshToken(refreshToken);
+          setAuthToken(authToken);
+          setUsers(JSON.parse(user));
+        } else {
+          navigation.replace("LoginScreen?reason=missing_data");
+          return null;
+        }
+      } catch (error) {
+        console.error("Error retrieving token", error);
+        navigation.replace("LoginScreen?reason=error");
+        return null;
+      }
+    }
+  }, []);
 
   useEffect(() => {
     getUser();
@@ -46,7 +73,14 @@ export default function HomeScreen({ navigation }) {
   const fetchAllUsers = async () => {
     try {
       setUsersLoading(true);
-      const res = await fetch("http://localhost:3000/api/auth/users");
+      const res = await fetch("http://localhost:3000/api/auth/users", {
+        method: "GET",
+        headers: {
+          Authorization: `Bearer ${authToken}`,
+          "refreshToken": refreshToken,
+          "Content-Type": "application/json",
+        },
+      });
       const data = await res.json();
       setUsers(data.userAccounts || []);
       setFilteredUsers(data.userAccounts || []);
@@ -110,7 +144,7 @@ export default function HomeScreen({ navigation }) {
 
   return (
     <>
-    <Notifications />
+      <Notifications />
       <View style={{ flex: 1, backgroundColor: "#000" }}>
         <ScrollView>
           {/* HEADER */}
@@ -265,7 +299,12 @@ export default function HomeScreen({ navigation }) {
 }
 
 const styles = StyleSheet.create({
-  header: { paddingTop: 45, paddingBottom: 15, alignItems: "center", marginTop: 25, },
+  header: {
+    paddingTop: 45,
+    paddingBottom: 15,
+    alignItems: "center",
+    marginTop: 25,
+  },
   hello: { color: "#fff", fontSize: 22, fontWeight: "bold" },
   subText: { color: "#888", fontSize: 13, marginTop: 4 },
   sectionTitle: {
