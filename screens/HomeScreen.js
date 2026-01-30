@@ -9,7 +9,7 @@ import {
   TouchableOpacity,
   Animated,
   Dimensions,
-  Image
+  Image,
 } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import BottomBar from "../components/BottomBar";
@@ -44,23 +44,30 @@ export default function HomeScreen({ navigation }) {
     try {
       const user = await AsyncStorage.getItem("user");
       if (user) setUserName(JSON.parse(user).name);
-    } catch (e) { console.error(e); }
+    } catch (e) {
+      console.error(e);
+    }
   };
 
   const fetchPageFromServer = async (page = 1) => {
     try {
-      const res = await secureFetch(`/api/blogs?page=${page}&limit=${PAGE_SIZE}`, {
-        method: "GET",
-        headers: { "Content-Type": "application/json" },
-      });
+      const res = await secureFetch(
+        `/api/blogs?page=${page}&limit=${PAGE_SIZE}`,
+        {
+          method: "GET",
+          headers: { "Content-Type": "application/json" },
+        },
+      );
       if (!res.ok) throw new Error("Server error");
       const data = await res.json();
       const received = data.blogs || [];
-      
-      setBlogs(prev => page === 1 ? received : [...prev, ...received]);
+
+      setBlogs((prev) => (page === 1 ? received : [...prev, ...received]));
       setHasMore(received.length === PAGE_SIZE);
       return true;
-    } catch (err) { return false; }
+    } catch (err) {
+      return false;
+    }
   };
 
   const fetchAllAndCache = async () => {
@@ -73,7 +80,9 @@ export default function HomeScreen({ navigation }) {
       setHasMore(all.length > PAGE_SIZE);
       setAllModeFallback(true);
       return true;
-    } catch (e) { return false; }
+    } catch (e) {
+      return false;
+    }
   };
 
   const fetchFirstPage = async () => {
@@ -92,9 +101,10 @@ export default function HomeScreen({ navigation }) {
       const start = (nextPage - 1) * PAGE_SIZE;
       const next = allBlogsCache.current.slice(start, start + PAGE_SIZE);
       if (next.length > 0) {
-        setBlogs(prev => [...prev, ...next]);
+        setBlogs((prev) => [...prev, ...next]);
         pageRef.current = nextPage;
-        if (start + next.length >= allBlogsCache.current.length) setHasMore(false);
+        if (start + next.length >= allBlogsCache.current.length)
+          setHasMore(false);
       }
     } else {
       const ok = await fetchPageFromServer(nextPage);
@@ -104,9 +114,13 @@ export default function HomeScreen({ navigation }) {
   };
 
   const getRenderedBlogs = () => {
-    return blogs.filter(b => {
-      const matchesCat = selectedCategory === "All" || (b.category || "").toLowerCase() === selectedCategory.toLowerCase();
-      const matchesSearch = !blogSearch || (b.name || "").toLowerCase().includes(blogSearch.toLowerCase());
+    return blogs.filter((b) => {
+      const matchesCat =
+        selectedCategory === "All" ||
+        (b.category || "").toLowerCase() === selectedCategory.toLowerCase();
+      const matchesSearch =
+        !blogSearch ||
+        (b.name || "").toLowerCase().includes(blogSearch.toLowerCase());
       return matchesCat && matchesSearch;
     });
   };
@@ -118,13 +132,39 @@ export default function HomeScreen({ navigation }) {
         <Text style={styles.subText}>Explore and interact with users</Text>
       </View>
       <Text style={styles.sectionTitle}>All Users</Text>
-      <TextInput placeholder="Search users..." placeholderTextColor="#777" style={styles.searchInput} value={userSearch} onChangeText={setUserSearch} />
+      <TextInput
+        placeholder="Search users..."
+        placeholderTextColor="#777"
+        style={styles.searchInput}
+        value={userSearch}
+        onChangeText={setUserSearch}
+      />
       <Text style={styles.sectionTitle}>All Blogs</Text>
-      <TextInput placeholder="Search blogs..." placeholderTextColor="#777" style={styles.searchInput} value={blogSearch} onChangeText={setBlogSearch} />
+      <TextInput
+        placeholder="Search blogs..."
+        placeholderTextColor="#777"
+        style={styles.searchInput}
+        value={blogSearch}
+        onChangeText={setBlogSearch}
+      />
       <View style={styles.categoryRow}>
-        {categories.map(cat => (
-          <TouchableOpacity key={cat} onPress={() => setSelectedCategory(cat)} style={[styles.categoryBtn, selectedCategory === cat && styles.activeCategory]}>
-            <Text style={[styles.categoryText, selectedCategory === cat && { color: "#000" }]}>{cat}</Text>
+        {categories.map((cat) => (
+          <TouchableOpacity
+            key={cat}
+            onPress={() => setSelectedCategory(cat)}
+            style={[
+              styles.categoryBtn,
+              selectedCategory === cat && styles.activeCategory,
+            ]}
+          >
+            <Text
+              style={[
+                styles.categoryText,
+                selectedCategory === cat && { color: "#000" },
+              ]}
+            >
+              {cat}
+            </Text>
           </TouchableOpacity>
         ))}
       </View>
@@ -138,11 +178,23 @@ export default function HomeScreen({ navigation }) {
         data={getRenderedBlogs()}
         keyExtractor={(item) => item._id}
         ListHeaderComponent={renderHeader}
-        renderItem={({ item, index }) => <BlogItem item={item} index={index} navigation={navigation} />}
+        renderItem={({ item, index }) => (
+          <BlogItem item={item} index={index} navigation={navigation} />
+        )}
         onEndReached={fetchMore}
         onEndReachedThreshold={0.5}
-        ListFooterComponent={loadingMore ? <ActivityIndicator color="#2ecc71" style={{ margin: 20 }} /> : null}
-        ListEmptyComponent={!loading && <Text style={{ color: "#777", textAlign: 'center' }}>No blogs found</Text>}
+        ListFooterComponent={
+          loadingMore ? (
+            <ActivityIndicator color="#2ecc71" style={{ margin: 20 }} />
+          ) : null
+        }
+        ListEmptyComponent={
+          !loading && (
+            <Text style={{ color: "#777", textAlign: "center" }}>
+              No blogs found
+            </Text>
+          )
+        }
         contentContainerStyle={{ paddingBottom: 100 }}
       />
       <BottomBar />
@@ -153,21 +205,57 @@ export default function HomeScreen({ navigation }) {
 const BlogItem = ({ item, index, navigation }) => {
   const anim = useRef(new Animated.Value(0)).current;
   useEffect(() => {
-    Animated.timing(anim, { toValue: 1, duration: 350, delay: index * 40, useNativeDriver: true }).start();
+    Animated.timing(anim, {
+      toValue: 1,
+      duration: 350,
+      delay: index * 40,
+      useNativeDriver: true,
+    }).start();
   }, []);
 
   return (
-    <Animated.View style={[styles.blogCard, { opacity: anim, transform: [{ translateY: anim.interpolate({ inputRange: [0, 1], outputRange: [10, 0] }) }] }]}>
-       <View style={styles.blogAuthorContainer}>
-          <View style={styles.blogAvatar}><Text style={styles.blogAvatarText}>{item.createdby?.[0] || 'U'}</Text></View>
-          <Text style={styles.blogAuthor}>{item.createdby || "Unknown"}</Text>
+    <Animated.View
+      style={[
+        styles.blogCard,
+        {
+          opacity: anim,
+          transform: [
+            {
+              translateY: anim.interpolate({
+                inputRange: [0, 1],
+                outputRange: [10, 0],
+              }),
+            },
+          ],
+        },
+      ]}
+    >
+      <View style={styles.blogAuthorContainer}>
+        <View style={styles.blogAvatar}>
+          <Text style={styles.blogAvatarText}>
+            {item.createdby?.[0] || "U"}
+          </Text>
         </View>
-        <Text style={styles.blogTitle}>{item.name}</Text>
-        {item.image?.url && <Image source={{ uri: item.image.url }} style={styles.blogImage} resizeMode="cover" />}
-        <Text numberOfLines={3} style={styles.blogDesc}>{item.desc}</Text>
-        <TouchableOpacity onPress={() => navigation.navigate("FullBlogScreen", { blogId: item._id })}>
-          <Text style={{ color: "#2ecc71", marginTop: 5 }}>Read more</Text>
-        </TouchableOpacity>
+        <Text style={styles.blogAuthor}>{item.createdby || "Unknown"}</Text>
+      </View>
+      <Text style={styles.blogTitle}>{item.name}</Text>
+      {item.image?.url && (
+        <Image
+          source={{ uri: item.image.url }}
+          style={styles.blogImage}
+          resizeMode="cover"
+        />
+      )}
+      <Text numberOfLines={3} style={styles.blogDesc}>
+        {item.desc}
+      </Text>
+      <TouchableOpacity
+        onPress={() =>
+          navigation.navigate("FullBlogScreen", { blogId: item._id })
+        }
+      >
+        <Text style={{ color: "#2ecc71", marginTop: 5 }}>Read more</Text>
+      </TouchableOpacity>
     </Animated.View>
   );
 };
@@ -176,18 +264,68 @@ const styles = StyleSheet.create({
   header: { paddingTop: 45, paddingBottom: 15, alignItems: "center" },
   hello: { color: "#fff", fontSize: 22, fontWeight: "bold" },
   subText: { color: "#888", fontSize: 13, marginTop: 4 },
-  sectionTitle: { color: "#fff", fontSize: 18, fontWeight: "bold", marginLeft: 15, marginTop: 15, marginBottom: 10 },
-  searchInput: { backgroundColor: "#111", color: "#fff", padding: 12, borderRadius: 10, marginHorizontal: 15, marginBottom: 10 },
-  categoryRow: { flexDirection: "row", flexWrap: "wrap", paddingHorizontal: 15, marginBottom: 10 },
-  categoryBtn: { borderWidth: 1, borderColor: "#2ecc71", paddingVertical: 5, paddingHorizontal: 12, borderRadius: 20, marginRight: 8, marginBottom: 10 },
+  sectionTitle: {
+    color: "#fff",
+    fontSize: 18,
+    fontWeight: "bold",
+    marginLeft: 15,
+    marginTop: 15,
+    marginBottom: 10,
+  },
+  searchInput: {
+    backgroundColor: "#111",
+    color: "#fff",
+    padding: 12,
+    borderRadius: 10,
+    marginHorizontal: 15,
+    marginBottom: 10,
+  },
+  categoryRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    paddingHorizontal: 15,
+    marginBottom: 10,
+  },
+  categoryBtn: {
+    borderWidth: 1,
+    borderColor: "#2ecc71",
+    paddingVertical: 5,
+    paddingHorizontal: 12,
+    borderRadius: 20,
+    marginRight: 8,
+    marginBottom: 10,
+  },
   activeCategory: { backgroundColor: "#2ecc71" },
   categoryText: { color: "#2ecc71", fontSize: 12 },
-  blogCard: { backgroundColor: "#111", padding: 15, borderRadius: 12, marginHorizontal: 15, marginBottom: 12 },
-  blogAuthorContainer: { flexDirection: "row", alignItems: "center", marginBottom: 8 },
-  blogAvatar: { width: 30, height: 30, borderRadius: 15, backgroundColor: "#2ecc71", justifyContent: "center", alignItems: "center", marginRight: 8 },
+  blogCard: {
+    backgroundColor: "#111",
+    padding: 15,
+    borderRadius: 12,
+    marginHorizontal: 15,
+    marginBottom: 12,
+  },
+  blogAuthorContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 8,
+  },
+  blogAvatar: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    backgroundColor: "#2ecc71",
+    justifyContent: "center",
+    alignItems: "center",
+    marginRight: 8,
+  },
   blogAvatarText: { color: "#000", fontWeight: "bold" },
   blogAuthor: { color: "#fff", fontWeight: "bold" },
   blogTitle: { color: "#fff", fontSize: 16, fontWeight: "bold" },
-  blogImage: { width: '100%', height: 180, borderRadius: 10, marginVertical: 10 },
-  blogDesc: { color: "#aaa", marginVertical: 6 }
+  blogImage: {
+    width: "100%",
+    height: 180,
+    borderRadius: 10,
+    marginVertical: 10,
+  },
+  blogDesc: { color: "#aaa", marginVertical: 6 },
 });

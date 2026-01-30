@@ -9,9 +9,9 @@ import {
   Pressable,
 } from "react-native";
 import { useState } from "react";
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Ionicons } from "@expo/vector-icons";
-
+import { secureFetch } from "api/apiClient";
 export default function AuthScreen({ navigation }) {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -37,16 +37,20 @@ export default function AuthScreen({ navigation }) {
 
     setLoading(true);
     try {
-      const res = await fetch("http://localhost:3000/api/auth/register", {
+      const res = await secureFetch("/api/auth/register", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: "",
+        },
         body: JSON.stringify({ name, email, password }),
       });
+
       const data = await res.json();
 
       if (res.status === 201) {
         showPopup(
-          "Account created! Please check your email and click 'Verify Account' before logging in."
+          "Account created! Please check your email and click 'Verify Account' before logging in.",
         );
         setIsSignup(false);
         setName("");
@@ -71,19 +75,23 @@ export default function AuthScreen({ navigation }) {
 
     setLoading(true);
     try {
-      const res = await fetch("http://localhost:3000/api/auth/login", {
+        const res = await secureFetch("/api/auth/login", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password }),
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: "",
+        },
+        body: JSON.stringify({email, password }),
       });
 
       const data = await res.json();
 
       if (res.status === 200) {
-        const {user,accessToken,refreshToken}=data;
+        const { user, accessToken, refreshToken } = data;
         await AsyncStorage.setItem("user", JSON.stringify(user));
-         await AsyncStorage.setItem("accessToken", accessToken);
-         await AsyncStorage.setItem("refreshToken", refreshToken);
+        await AsyncStorage.setItem("accessToken", accessToken);
+        await AsyncStorage.setItem("refreshToken", refreshToken);
+
         navigation.replace("HomeScreen");
       } else {
         showPopup(data.message || "Invalid credentials");
@@ -236,7 +244,12 @@ const styles = StyleSheet.create({
     width: "80%",
     alignItems: "center",
   },
-  modalText: { color: "#fff", fontSize: 16, textAlign: "center", marginBottom: 15 },
+  modalText: {
+    color: "#fff",
+    fontSize: 16,
+    textAlign: "center",
+    marginBottom: 15,
+  },
   modalButton: {
     backgroundColor: "#2ecc71",
     paddingVertical: 10,
