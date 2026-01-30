@@ -1,4 +1,3 @@
-// src/screens/AddBlogScreen.js
 import React, { useState, useRef, useEffect } from "react";
 import {
   View,
@@ -26,8 +25,7 @@ import BottomBar from "../components/BottomBar";
 import { secureFetch } from "api/apiClient";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import Markdown from "react-native-markdown-display";
-import * as FileSystem from "expo-file-system";
-
+import * as FileSystem from "expo-file-system/legacy";
 const SCREEN_HEIGHT = Dimensions.get("window").height;
 
 // --- Theme Constants ---
@@ -159,35 +157,8 @@ export default function AddBlogScreen() {
         return "image/webp";
       case "heic":
         return "image/heic";
-      case "heif":
-        return "image/heif";
       default:
-        return "application/octet-stream";
-    }
-  };
-
-  // This attempts to fetch blob (works often). If it fails (Android content://), fallback to reading base64 via expo-file-system and creating a blob.
-  const getBlobFromUri = async (uri) => {
-    try {
-      const fetched = await fetch(uri);
-      const blob = await fetched.blob();
-      return blob;
-    } catch (err) {
-      try {
-        const base64 = await FileSystem.readAsStringAsync(uri, {
-          encoding: FileSystem.EncodingType.Base64,
-        });
-        let filename = uri.split("/").pop() || `file-${Date.now()}`;
-        filename = filename.split("?")[0];
-        const mime = getMimeFromFilename(filename);
-        const dataUrl = `data:${mime};base64,${base64}`;
-        const res = await fetch(dataUrl);
-        const blob = await res.blob();
-        return blob;
-      } catch (e) {
-        console.error("getBlobFromUri fallback failed", e);
-        throw e;
-      }
+        return "image/jpeg"; // Default fallback
     }
   };
 
@@ -203,15 +174,18 @@ export default function AddBlogScreen() {
         );
         return;
       }
+
+      // Enforcing MediaTypeOptions.Images ensures ONLY images are selectable
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
-        quality: 0.7,
+        quality: 0.8, // Slightly higher quality
         allowsEditing: true,
       });
 
       if (!result.canceled && result.assets && result.assets.length > 0) {
         const uri = result.assets[0].uri;
         setLocalImageUri(uri);
+        // Start upload process immediately
         await requestPresignedUrlAndUpload(uri);
       }
     } catch (error) {
@@ -220,137 +194,88 @@ export default function AddBlogScreen() {
     }
   };
 
-  // --- NEW: request signed signature from backend and upload to Cloudinary ---
-  const requestPresignedUrlAndUpload = async (imageUri) => {
-    setIsUploadingImage(true);
-    setImageUploadProgressPercent(0);
-    setImageUploadCompleted(false);
+ const requestPresignedUrlAndUpload = async (imageUri) => {
+  setIsUploadingImage(true);
 
-    try {
-      // derive filename
-      let fileName = imageUri.split("/").pop() || `upload-${Date.now()}`;
-      fileName = fileName.split("?")[0];
+  try {
+    let fileToUpload;
 
-      // try to get blob to determine MIME & size (not strictly required for Cloudinary, but useful)
-      let blob;
-      try {
-        blob = await getBlobFromUri(imageUri);
-      } catch (e) {
-        console.warn("Could not create blob; proceeding with guessed mime");
-      }
-
-      const fileType = (blob && blob.type) || getMimeFromFilename(fileName);
-
-      // 1) Ask your backend serverless signing route for signature
-      // Using secureFetch so it uses API_BASE_URL and auth if needed
-      const sigRes = await secureFetch("/api/cloudinary/sign", {
-        method: "GET",
-      });
-      if (!sigRes.ok) {
-        let txt = "";
-        try {
-          txt = await sigRes.text();
-        } catch (_) {}
-        throw new Error("Failed to get Cloudinary signature: " + txt);
-      }
-      const { apiKey, cloudName, timestamp, signature, folder } =
-        await sigRes.json();
-
-      if (!cloudName || !apiKey || !signature) {
-        throw new Error("Invalid signature response from server");
-      }
-
-      // 2) Build FormData
-      const formData = new FormData();
-      // In React Native + Expo, file object should be { uri, type, name }
-      formData.append("file", {
-        uri: imageUri,
-        type: fileType,
-        name: fileName,
-      });
-      formData.append("api_key", apiKey);
-      formData.append("timestamp", String(timestamp));
-      formData.append("signature", signature);
-      if (folder) formData.append("folder", folder);
-      // optional: transformations or eager params can be appended here
-
-      // 3) Upload directly to Cloudinary using XHR to get progress
-      const uploadUrl = `https://api.cloudinary.com/v1_1/${cloudName}/image/upload`;
-      await uploadFormDataWithProgress(uploadUrl, formData);
-
-      // 4) After successful upload, Cloudinary will return JSON with secure_url.
-      // The uploadFormDataWithProgress returns the parsed json result:
-      // we set cdnImageUrl inside that function's return
-      setImageUploadCompleted(true);
-      showToast("Image uploaded successfully", "success");
-    } catch (error) {
-      console.error("requestPresignedUrlAndUpload error:", error);
-      showToast("Image upload failed", "error");
-    } finally {
-      setIsUploadingImage(false);
+    if (Platform.OS === 'web') {
+      // 1. Fetch the actual blob data from the local blob URL
+      const response = await fetch(imageUri);
+      const blob = await response.blob();
+      
+      // 2. Create a file object from the blob
+      fileToUpload = new File([blob], "upload.jpg", { type: blob.type });
+    } else {
+      // Native (Mobile) logic: use the base64 approach we discussed
+      const base64 = await FileSystem.readAsStringAsync(imageUri, { encoding: 'base64' });
+      fileToUpload = `data:image/jpeg;base64,${base64}`;
     }
-  };
 
-  // upload with progress via XHR and parse response
+    const sigRes = await secureFetch("/api/cloudinary/sign", { method: "GET" });
+    const sigData = await sigRes.json();
+
+    const formData = new FormData();
+    // This now sends the actual bits and bytes of the image, not the URL string
+    formData.append("file", fileToUpload); 
+    formData.append("api_key", sigData.apiKey);
+    formData.append("timestamp", String(sigData.timestamp));
+    formData.append("signature", sigData.signature);
+    formData.append("folder", sigData.folder);
+    formData.append("upload_preset", "BlogEver");
+
+    const uploadUrl = `https://api.cloudinary.com/v1_1/${sigData.cloudName}/image/upload`;
+
+    const response = await fetch(uploadUrl, {
+      method: "POST",
+      body: formData,
+    });
+
+    const cloudResp = await response.json();
+    if (cloudResp.secure_url) {
+      setImageUploadCompleted(true);
+      setCdnImageUrl(cloudResp.secure_url);
+      showToast("Upload successful!", "success");
+    } else {
+      throw new Error(cloudResp.error?.message || "Upload failed");
+    }
+  } catch (error) {
+    console.error("Upload error:", error);
+    showToast(error.message, "error");
+  } finally {
+    setIsUploadingImage(false);
+  }
+};
   const uploadFormDataWithProgress = (uploadUrl, formData) => {
     return new Promise((resolve, reject) => {
-      try {
-        const xhr = new XMLHttpRequest();
-        xhr.open("POST", uploadUrl);
+      const xhr = new XMLHttpRequest();
+      xhr.open("POST", uploadUrl);
 
-        xhr.upload.onprogress = (e) => {
-          if (e.lengthComputable) {
-            setImageUploadProgressPercent(
-              Math.round((e.loaded / e.total) * 100),
-            );
-          }
-        };
+      xhr.upload.onprogress = (e) => {
+        if (e.lengthComputable) {
+          setImageUploadProgressPercent(Math.round((e.loaded / e.total) * 100));
+        }
+      };
 
-        xhr.onload = () => {
+      xhr.onload = () => {
+        if (xhr.status >= 200 && xhr.status < 300) {
           try {
-            const text = xhr.responseText;
-            const json = text ? JSON.parse(text) : null;
-            if (xhr.status >= 200 && xhr.status < 300 && json) {
-              // Cloudinary returns secure_url and public_id etc.
-              if (json.secure_url) {
-                setCdnImageUrl(json.secure_url);
-                resolve(json);
-                return;
-              } else {
-                console.error("Cloudinary response missing secure_url:", json);
-                reject(
-                  new Error("Upload succeeded but no secure_url returned"),
-                );
-                return;
-              }
-            } else {
-              console.error("Upload failed:", xhr.status, xhr.responseText);
-              reject(new Error(`Upload failed with status ${xhr.status}`));
-            }
-          } catch (err) {
-            console.error(
-              "Failed to parse upload response:",
-              err,
-              xhr.responseText,
-            );
-            reject(err);
+            const json = JSON.parse(xhr.responseText);
+            resolve(json);
+          } catch (e) {
+            reject(new Error("Failed to parse response"));
           }
-        };
+        } else {
+          reject(new Error(`Upload failed: ${xhr.status}`));
+        }
+      };
 
-        xhr.onerror = () => {
-          console.error("Upload XHR error");
-          reject(new Error("Upload network error"));
-        };
-
-        // In RN, FormData can be passed directly to xhr.send
-        xhr.send(formData);
-      } catch (e) {
-        reject(e);
-      }
+      xhr.onerror = () => reject(new Error("Network error during upload"));
+      xhr.send(formData);
     });
   };
 
-  // rest of your screen unchanged (insertMarkdown, toggleFullscreen, submitBlog, UI rendering etc.)
   const insertMarkdown = (syntaxStart, syntaxEnd) => {
     setMarkdownBody((prev) => `${prev}${syntaxStart}${syntaxEnd}`);
   };
@@ -358,6 +283,8 @@ export default function AddBlogScreen() {
   const toggleFullscreen = () => setIsEditorFullscreen(!isEditorFullscreen);
 
   const submitBlog = async () => {
+    if (!canProceed) return;
+
     try {
       const payload = {
         title: titleText,
@@ -376,6 +303,7 @@ export default function AddBlogScreen() {
 
       if (res.ok) {
         showToast("Blog published successfully!", "success");
+        // Reset form
         setTitleText("");
         setMarkdownBody("");
         setLocalImageUri(null);
@@ -396,17 +324,6 @@ export default function AddBlogScreen() {
     selectedCategory &&
     (!localImageUri || imageUploadCompleted);
 
-  // Rendering code unchanged from your original screen (I omitted it here for brevity in this block)
-  // ... (Use your existing renderStep1/renderStep2 UI code; it will work with the new upload flow)
-
-  // For brevity, reuse the render functions/styles from your original file below
-  // (paste the same renderStep1/renderStep2 and return JSX as before)
-  // ------------------------------
-  // (The rest of the file — UI & styles — remains exactly the same as in your original file.)
-  // Paste your existing renderStep1, renderStep2 and return statement here.
-  // ------------------------------
-
-  // I'll reuse the same renderStep1/renderStep2 from your previous file:
   const renderStep1 = () => (
     <View style={styles.card}>
       <Text style={styles.label}>Title</Text>
@@ -479,7 +396,11 @@ export default function AddBlogScreen() {
       <Text style={[styles.label, { marginTop: 16 }]}>Cover Image</Text>
       <TouchableOpacity onPress={handlePickImage} style={styles.uploadArea}>
         {localImageUri ? (
-          <Image source={{ uri: localImageUri }} style={styles.uploadedImage} />
+          <Image
+            source={{ uri: localImageUri }}
+            style={styles.uploadedImage}
+            resizeMode="contain"
+          />
         ) : (
           <View style={styles.uploadPlaceholder}>
             <Ionicons name="image-outline" size={32} color={COLORS.muted} />
@@ -530,7 +451,9 @@ export default function AddBlogScreen() {
           uri:
             cdnImageUrl || localImageUri || "https://via.placeholder.com/400",
         }}
+        // FIX: contain ensures the preview fits on screen without cropping
         style={styles.previewCover}
+        resizeMode="contain"
       />
 
       <View style={styles.previewContent}>
@@ -652,7 +575,6 @@ export default function AddBlogScreen() {
   );
 }
 
-// Styles (identical to your original styles) ------------------------------------------------
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.bg },
   scrollContent: { padding: 16, paddingBottom: 100 },
@@ -762,7 +684,7 @@ const styles = StyleSheet.create({
   toolBtnText: { color: COLORS.primary, fontWeight: "bold", fontSize: 14 },
   fullscreenBtn: { padding: 6, marginLeft: "auto" },
   uploadArea: {
-    height: 140,
+    height: 200, // Increased height to better fit images
     backgroundColor: COLORS.input,
     borderRadius: 12,
     justifyContent: "center",
@@ -809,9 +731,10 @@ const styles = StyleSheet.create({
   previewLabel: { color: COLORS.primary, fontWeight: "bold", letterSpacing: 1 },
   previewCover: {
     width: "100%",
-    height: 200,
+    height: 250, // Taller preview area
     borderRadius: 12,
     marginBottom: 16,
+    backgroundColor: "#1F2937",
   },
   previewContent: { paddingHorizontal: 4 },
   previewTitle: {
