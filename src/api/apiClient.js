@@ -1,7 +1,6 @@
 // src/api/apiClient.js
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import jwtDecode from 'jwt-decode';
-
+import { jwtDecode } from 'jwt-decode';
 let isRefreshing = false;
 
 // List of functions waiting for the refreshed token
@@ -25,7 +24,7 @@ function isTokenExpiring(accessToken, thresholdSeconds = 60) {
   const now = Math.floor(Date.now() / 1000);
   return exp - now < thresholdSeconds;
 }
-export const API_BASE_URL = 'https://api.blogever.buttnetwork.com';
+export const API_BASE_URL = 'http://localhost:3000';
 
 export async function secureFetch(endpoint, options = {}) {
   const url = `${API_BASE_URL}${endpoint}`;
