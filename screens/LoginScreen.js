@@ -9,7 +9,7 @@ import {
   Pressable,
 } from "react-native";
 import { useState } from "react";
-import * as SecureStore from 'expo-secure-store';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from "@expo/vector-icons";
 
 export default function AuthScreen({ navigation }) {
@@ -81,9 +81,9 @@ export default function AuthScreen({ navigation }) {
 
       if (res.status === 200) {
         const {user,accessToken,refreshToken}=data;
-        await SecureStore.setItemAsync("user", JSON.stringify(user));
-        await SecureStore.setItemAsync("accessToken", accessToken);
-        await SecureStore.setItemAsync("refreshToken", refreshToken);
+        await AsyncStorage.setItem("user", JSON.stringify(user));
+         await AsyncStorage.setItem("accessToken", accessToken);
+         await AsyncStorage.setItem("refreshToken", refreshToken);
         navigation.replace("HomeScreen");
       } else {
         showPopup(data.message || "Invalid credentials");

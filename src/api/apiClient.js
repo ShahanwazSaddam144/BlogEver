@@ -1,8 +1,7 @@
 // src/api/apiClient.js
-import * as SecureStore from 'expo-secure-store';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import jwtDecode from 'jwt-decode';
 
-// Flag to indicate if a token refresh request is in progress
 let isRefreshing = false;
 
 // List of functions waiting for the refreshed token
@@ -29,14 +28,14 @@ function isTokenExpiring(accessToken, thresholdSeconds = 60) {
 
 
 export async function secureFetch(url, options = {}) {
-  let accessToken = await SecureStore.getItemAsync('accessToken');
+  let accessToken = await AsyncStorage.getItem('accessToken');
 
   // Check if token is about to expire
   if (accessToken && isTokenExpiring(accessToken)) {
     if (!isRefreshing) {
       isRefreshing = true;
 
-      const refreshToken = await SecureStore.getItemAsync('refreshToken');
+      const refreshToken = await AsyncStorage.getItem('refreshToken');
 
       // Call refresh endpoint
       const response = await fetch('http://localhost:3000/api/authrefresh', {
@@ -47,8 +46,8 @@ export async function secureFetch(url, options = {}) {
 
       if (!response.ok) {
         // Refresh failed — clear stored tokens
-        await SecureStore.deleteItemAsync('accessToken');
-        await SecureStore.deleteItemAsync('refreshToken');
+        await AsyncStorage.removeItem('accessToken');
+        await AsyncStorage.removeItem('refreshToken');
         isRefreshing = false;
         notifyQueuedRequests(null);
         throw new Error('Refresh token failed');

@@ -24,7 +24,7 @@ import DateTimePicker from "@react-native-community/datetimepicker";
 import { Ionicons } from "@expo/vector-icons"; // Ensure you have @expo/vector-icons installed
 import BottomBar from "../components/BottomBar";
 import { secureFetch } from "api/apiClient";
-import * as SecureStore from "expo-secure-store";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import Markdown from "react-native-markdown-display";
 
 const CDN_BASE_URL = "https://cdn.example.com";
@@ -116,7 +116,7 @@ export default function AddBlogScreen() {
   useEffect(() => {
     (async () => {
       try {
-        const userJson = await SecureStore.getItemAsync("user");
+        const userJson = await AsyncStorage.getItem("user");
         if (userJson) {
           const userObj = JSON.parse(userJson);
           setAuthorName(userObj.name || "");
