@@ -576,7 +576,7 @@ export default function AddBlogScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: COLORS.bg },
+  container: { flex: 1, backgroundColor: "#000000"},
   scrollContent: { padding: 16, paddingBottom: 100 },
   header: {
     paddingHorizontal: 20,
@@ -584,7 +584,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    backgroundColor: COLORS.bg,
+    backgroundColor: "#000000",
     borderBottomWidth: 1,
     borderBottomColor: COLORS.card,
   },
@@ -609,7 +609,7 @@ const styles = StyleSheet.create({
   },
   stepActive: { backgroundColor: COLORS.primary },
   card: {
-    backgroundColor: COLORS.card,
+    backgroundColor: "#000000",
     borderRadius: 16,
     padding: 20,
     shadowColor: "#000",
