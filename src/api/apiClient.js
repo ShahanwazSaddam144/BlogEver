@@ -25,27 +25,26 @@ function isTokenExpiring(accessToken, thresholdSeconds = 60) {
   const now = Math.floor(Date.now() / 1000);
   return exp - now < thresholdSeconds;
 }
+export const API_BASE_URL = 'http://localhost:3000';
 
+export async function secureFetch(endpoint, options = {}) {
+  const url = `${API_BASE_URL}${endpoint}`;
 
-export async function secureFetch(url, options = {}) {
   let accessToken = await AsyncStorage.getItem('accessToken');
 
-  // Check if token is about to expire
   if (accessToken && isTokenExpiring(accessToken)) {
     if (!isRefreshing) {
       isRefreshing = true;
 
       const refreshToken = await AsyncStorage.getItem('refreshToken');
 
-      // Call refresh endpoint
-      const response = await fetch('http://localhost:3000/api/authrefresh', {
+      const response = await fetch(`${API_BASE_URL}/api/authrefresh`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ refreshToken }),
       });
 
       if (!response.ok) {
-        // Refresh failed — clear stored tokens
         await AsyncStorage.removeItem('accessToken');
         await AsyncStorage.removeItem('refreshToken');
         isRefreshing = false;
@@ -55,10 +54,9 @@ export async function secureFetch(url, options = {}) {
 
       const data = await response.json();
       accessToken = data.accessToken;
-      await SecureStore.setItemAsync('accessToken', accessToken);
+      await AsyncStorage.setItem('accessToken', accessToken);
 
       isRefreshing = false;
-      // Notify all queued requests
       notifyQueuedRequests(accessToken);
     } else {
       // Token is already refreshing, wait for it
@@ -71,6 +69,7 @@ export async function secureFetch(url, options = {}) {
     }
   }
 
+  // Add headers
   options.headers = {
     ...(options.headers || {}),
     Authorization: accessToken ? `Bearer ${accessToken}` : '',

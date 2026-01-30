@@ -21,36 +21,35 @@ import {
 import * as ImagePicker from "expo-image-picker";
 import RNPickerSelect from "react-native-picker-select";
 import DateTimePicker from "@react-native-community/datetimepicker";
-import { Ionicons } from "@expo/vector-icons"; // Ensure you have @expo/vector-icons installed
+import { Ionicons } from "@expo/vector-icons";
 import BottomBar from "../components/BottomBar";
 import { secureFetch } from "api/apiClient";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import Markdown from "react-native-markdown-display";
+import * as FileSystem from "expo-file-system";
 
-const CDN_BASE_URL = "https://cdn.example.com";
 const SCREEN_HEIGHT = Dimensions.get("window").height;
 
 // --- Theme Constants ---
 const COLORS = {
-  bg: "#111827", // Dark Slate
-  card: "#1F2937", // Lighter Slate
-  input: "#374151", // Input BG
-  text: "#F9FAFB", // White-ish
-  muted: "#9CA3AF", // Grey text
-  primary: "#10B981", // Emerald Green
+  bg: "#111827",
+  card: "#1F2937",
+  input: "#374151",
+  text: "#F9FAFB",
+  muted: "#9CA3AF",
+  primary: "#10B981",
   danger: "#EF4444",
   border: "#374151",
 };
 
-// --- Reusable Toolbar Component ---
 const MarkdownToolbar = ({ onInsert, onToggleFullscreen, isFullscreen }) => {
   const tools = [
-    { label: "B", value: "**", endValue: "**", icon: "bold" },
-    { label: "I", value: "_", endValue: "_", icon: "italic" },
-    { label: "H1", value: "\n# ", endValue: "", icon: "text" },
-    { label: "H2", value: "\n## ", endValue: "", icon: "text" },
-   { label: "Link", icon: "link", value: "[url text", endValue: "](https://)" },
-    { label: "Code", value: "`", endValue: "`", icon: "code-slash" },
+    { label: "B", value: "**", endValue: "**" },
+    { label: "I", value: "_", endValue: "_" },
+    { label: "H1", value: "\n# ", endValue: "" },
+    { label: "H2", value: "\n## ", endValue: "" },
+    { label: "Link", value: "[url text", endValue: "](https://)" },
+    { label: "Code", value: "`", endValue: "`" },
   ];
 
   return (
@@ -62,13 +61,15 @@ const MarkdownToolbar = ({ onInsert, onToggleFullscreen, isFullscreen }) => {
             style={styles.toolBtn}
             onPress={() => onInsert(t.value, t.endValue)}
           >
-            {/* Using text labels for simplicity, swap with Icons if preferred */}
             <Text style={styles.toolBtnText}>{t.label}</Text>
           </TouchableOpacity>
         ))}
       </ScrollView>
 
-      <TouchableOpacity style={styles.fullscreenBtn} onPress={onToggleFullscreen}>
+      <TouchableOpacity
+        style={styles.fullscreenBtn}
+        onPress={onToggleFullscreen}
+      >
         <Ionicons
           name={isFullscreen ? "contract" : "expand"}
           size={20}
@@ -80,7 +81,7 @@ const MarkdownToolbar = ({ onInsert, onToggleFullscreen, isFullscreen }) => {
 };
 
 export default function AddBlogScreen() {
-  // --------------- form state ---------------
+  // form state
   const [authorName, setAuthorName] = useState("");
   const [titleText, setTitleText] = useState("");
   const [markdownBody, setMarkdownBody] = useState("");
@@ -88,20 +89,20 @@ export default function AddBlogScreen() {
   const [publishDate, setPublishDate] = useState(new Date());
   const [showPublishDatePicker, setShowPublishDatePicker] = useState(false);
 
-  // --------------- image state ---------------
+  // image state
   const [localImageUri, setLocalImageUri] = useState(null);
   const [cdnImageUrl, setCdnImageUrl] = useState(null);
   const [isUploadingImage, setIsUploadingImage] = useState(false);
-  const [imageUploadProgressPercent, setImageUploadProgressPercent] = useState(0);
+  const [imageUploadProgressPercent, setImageUploadProgressPercent] =
+    useState(0);
   const [imageUploadCompleted, setImageUploadCompleted] = useState(false);
 
-  // --------------- UI state ---------------
+  // UI state
   const [currentStep, setCurrentStep] = useState(1);
   const [alertMessage, setAlertMessage] = useState("");
   const [alertType, setAlertType] = useState("success");
   const alertAnimation = useRef(new Animated.Value(0)).current;
 
-  // Editor refs
   const [isEditorFullscreen, setIsEditorFullscreen] = useState(false);
   const markdownInputRef = useRef(null);
   const modalInputRef = useRef(null);
@@ -125,7 +126,6 @@ export default function AddBlogScreen() {
     })();
   }, []);
 
-  // --------------- Toast ---------------
   const showToast = (message, type = "success") => {
     setAlertMessage(message);
     setAlertType(type);
@@ -144,12 +144,63 @@ export default function AddBlogScreen() {
     });
   };
 
-  // --------------- Image Handling ---------------
+  // helpers
+  const getMimeFromFilename = (filename) => {
+    const ext = (filename || "").split(".").pop().toLowerCase();
+    switch (ext) {
+      case "jpg":
+      case "jpeg":
+        return "image/jpeg";
+      case "png":
+        return "image/png";
+      case "gif":
+        return "image/gif";
+      case "webp":
+        return "image/webp";
+      case "heic":
+        return "image/heic";
+      case "heif":
+        return "image/heif";
+      default:
+        return "application/octet-stream";
+    }
+  };
+
+  // This attempts to fetch blob (works often). If it fails (Android content://), fallback to reading base64 via expo-file-system and creating a blob.
+  const getBlobFromUri = async (uri) => {
+    try {
+      const fetched = await fetch(uri);
+      const blob = await fetched.blob();
+      return blob;
+    } catch (err) {
+      try {
+        const base64 = await FileSystem.readAsStringAsync(uri, {
+          encoding: FileSystem.EncodingType.Base64,
+        });
+        let filename = uri.split("/").pop() || `file-${Date.now()}`;
+        filename = filename.split("?")[0];
+        const mime = getMimeFromFilename(filename);
+        const dataUrl = `data:${mime};base64,${base64}`;
+        const res = await fetch(dataUrl);
+        const blob = await res.blob();
+        return blob;
+      } catch (e) {
+        console.error("getBlobFromUri fallback failed", e);
+        throw e;
+      }
+    }
+  };
+
+  // Image handling
   const handlePickImage = async () => {
     try {
-      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      const { status } =
+        await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (status !== "granted") {
-        Alert.alert("Permission required", "Allow access to photos to upload a cover.");
+        Alert.alert(
+          "Permission required",
+          "Allow access to photos to upload a cover.",
+        );
         return;
       }
       const result = await ImagePicker.launchImageLibraryAsync({
@@ -159,68 +210,153 @@ export default function AddBlogScreen() {
       });
 
       if (!result.canceled && result.assets && result.assets.length > 0) {
-        setLocalImageUri(result.assets[0].uri);
-        await requestPresignedUrlAndUpload(result.assets[0].uri);
+        const uri = result.assets[0].uri;
+        setLocalImageUri(uri);
+        await requestPresignedUrlAndUpload(uri);
       }
     } catch (error) {
+      console.error("handlePickImage error:", error);
       showToast("Could not select image", "error");
     }
   };
 
+  // --- NEW: request signed signature from backend and upload to Cloudinary ---
   const requestPresignedUrlAndUpload = async (imageUri) => {
     setIsUploadingImage(true);
     setImageUploadProgressPercent(0);
     setImageUploadCompleted(false);
 
     try {
-      const tokenResponse = await secureFetch("/api/upload-token", { method: "GET" });
-      if (!tokenResponse.ok) throw new Error("Failed to get upload token");
-      
-      const { uploadUrl, cdnKey } = await tokenResponse.json();
-      await uploadFileToCdnWithProgress(uploadUrl, imageUri);
+      // derive filename
+      let fileName = imageUri.split("/").pop() || `upload-${Date.now()}`;
+      fileName = fileName.split("?")[0];
 
-      setCdnImageUrl(`${CDN_BASE_URL}/${cdnKey}`);
+      // try to get blob to determine MIME & size (not strictly required for Cloudinary, but useful)
+      let blob;
+      try {
+        blob = await getBlobFromUri(imageUri);
+      } catch (e) {
+        console.warn("Could not create blob; proceeding with guessed mime");
+      }
+
+      const fileType = (blob && blob.type) || getMimeFromFilename(fileName);
+
+      // 1) Ask your backend serverless signing route for signature
+      // Using secureFetch so it uses API_BASE_URL and auth if needed
+      const sigRes = await secureFetch("/api/cloudinary/sign", {
+        method: "GET",
+      });
+      if (!sigRes.ok) {
+        let txt = "";
+        try {
+          txt = await sigRes.text();
+        } catch (_) {}
+        throw new Error("Failed to get Cloudinary signature: " + txt);
+      }
+      const { apiKey, cloudName, timestamp, signature, folder } =
+        await sigRes.json();
+
+      if (!cloudName || !apiKey || !signature) {
+        throw new Error("Invalid signature response from server");
+      }
+
+      // 2) Build FormData
+      const formData = new FormData();
+      // In React Native + Expo, file object should be { uri, type, name }
+      formData.append("file", {
+        uri: imageUri,
+        type: fileType,
+        name: fileName,
+      });
+      formData.append("api_key", apiKey);
+      formData.append("timestamp", String(timestamp));
+      formData.append("signature", signature);
+      if (folder) formData.append("folder", folder);
+      // optional: transformations or eager params can be appended here
+
+      // 3) Upload directly to Cloudinary using XHR to get progress
+      const uploadUrl = `https://api.cloudinary.com/v1_1/${cloudName}/image/upload`;
+      await uploadFormDataWithProgress(uploadUrl, formData);
+
+      // 4) After successful upload, Cloudinary will return JSON with secure_url.
+      // The uploadFormDataWithProgress returns the parsed json result:
+      // we set cdnImageUrl inside that function's return
       setImageUploadCompleted(true);
       showToast("Image uploaded successfully", "success");
     } catch (error) {
+      console.error("requestPresignedUrlAndUpload error:", error);
       showToast("Image upload failed", "error");
     } finally {
       setIsUploadingImage(false);
     }
   };
 
-  const uploadFileToCdnWithProgress = (uploadUrl, fileUri) => {
-    return new Promise(async (resolve, reject) => {
+  // upload with progress via XHR and parse response
+  const uploadFormDataWithProgress = (uploadUrl, formData) => {
+    return new Promise((resolve, reject) => {
       try {
-        const response = await fetch(fileUri);
-        const blob = await response.blob();
         const xhr = new XMLHttpRequest();
-        xhr.open("PUT", uploadUrl);
-        
+        xhr.open("POST", uploadUrl);
+
         xhr.upload.onprogress = (e) => {
           if (e.lengthComputable) {
-            setImageUploadProgressPercent(Math.round((e.loaded / e.total) * 100));
+            setImageUploadProgressPercent(
+              Math.round((e.loaded / e.total) * 100),
+            );
           }
         };
-        xhr.onload = () => (xhr.status >= 200 && xhr.status < 300 ? resolve() : reject());
-        xhr.onerror = () => reject();
-        xhr.send(blob);
+
+        xhr.onload = () => {
+          try {
+            const text = xhr.responseText;
+            const json = text ? JSON.parse(text) : null;
+            if (xhr.status >= 200 && xhr.status < 300 && json) {
+              // Cloudinary returns secure_url and public_id etc.
+              if (json.secure_url) {
+                setCdnImageUrl(json.secure_url);
+                resolve(json);
+                return;
+              } else {
+                console.error("Cloudinary response missing secure_url:", json);
+                reject(
+                  new Error("Upload succeeded but no secure_url returned"),
+                );
+                return;
+              }
+            } else {
+              console.error("Upload failed:", xhr.status, xhr.responseText);
+              reject(new Error(`Upload failed with status ${xhr.status}`));
+            }
+          } catch (err) {
+            console.error(
+              "Failed to parse upload response:",
+              err,
+              xhr.responseText,
+            );
+            reject(err);
+          }
+        };
+
+        xhr.onerror = () => {
+          console.error("Upload XHR error");
+          reject(new Error("Upload network error"));
+        };
+
+        // In RN, FormData can be passed directly to xhr.send
+        xhr.send(formData);
       } catch (e) {
         reject(e);
       }
     });
   };
 
-  // --------------- Markdown Logic ---------------
+  // rest of your screen unchanged (insertMarkdown, toggleFullscreen, submitBlog, UI rendering etc.)
   const insertMarkdown = (syntaxStart, syntaxEnd) => {
     setMarkdownBody((prev) => `${prev}${syntaxStart}${syntaxEnd}`);
   };
 
-  const toggleFullscreen = () => {
-    setIsEditorFullscreen(!isEditorFullscreen);
-  };
+  const toggleFullscreen = () => setIsEditorFullscreen(!isEditorFullscreen);
 
-  // --------------- Submission ---------------
   const submitBlog = async () => {
     try {
       const payload = {
@@ -240,7 +376,6 @@ export default function AddBlogScreen() {
 
       if (res.ok) {
         showToast("Blog published successfully!", "success");
-        // Reset form
         setTitleText("");
         setMarkdownBody("");
         setLocalImageUri(null);
@@ -250,16 +385,30 @@ export default function AddBlogScreen() {
         showToast("Failed to publish blog", "error");
       }
     } catch (e) {
+      console.error("submitBlog error:", e);
       showToast("Network error", "error");
     }
   };
 
-  const canProceed = titleText && markdownBody && selectedCategory && (!localImageUri || imageUploadCompleted);
+  const canProceed =
+    titleText &&
+    markdownBody &&
+    selectedCategory &&
+    (!localImageUri || imageUploadCompleted);
 
-  // --------------- Render Helpers ---------------
+  // Rendering code unchanged from your original screen (I omitted it here for brevity in this block)
+  // ... (Use your existing renderStep1/renderStep2 UI code; it will work with the new upload flow)
+
+  // For brevity, reuse the render functions/styles from your original file below
+  // (paste the same renderStep1/renderStep2 and return JSX as before)
+  // ------------------------------
+  // (The rest of the file — UI & styles — remains exactly the same as in your original file.)
+  // Paste your existing renderStep1, renderStep2 and return statement here.
+  // ------------------------------
+
+  // I'll reuse the same renderStep1/renderStep2 from your previous file:
   const renderStep1 = () => (
     <View style={styles.card}>
-      {/* Title */}
       <Text style={styles.label}>Title</Text>
       <TextInput
         style={[styles.input, styles.titleInput]}
@@ -269,7 +418,6 @@ export default function AddBlogScreen() {
         onChangeText={setTitleText}
       />
 
-      {/* Category & Date */}
       <View style={styles.row}>
         <View style={{ flex: 1, marginRight: 10 }}>
           <Text style={styles.label}>Category</Text>
@@ -310,7 +458,6 @@ export default function AddBlogScreen() {
         />
       )}
 
-      {/* Editor Section */}
       <Text style={[styles.label, { marginTop: 16 }]}>Content</Text>
       <View style={styles.editorContainer}>
         <MarkdownToolbar
@@ -329,7 +476,6 @@ export default function AddBlogScreen() {
         />
       </View>
 
-      {/* Image Uploader */}
       <Text style={[styles.label, { marginTop: 16 }]}>Cover Image</Text>
       <TouchableOpacity onPress={handlePickImage} style={styles.uploadArea}>
         {localImageUri ? (
@@ -341,16 +487,23 @@ export default function AddBlogScreen() {
           </View>
         )}
       </TouchableOpacity>
-      
+
       {isUploadingImage && (
         <View style={styles.progressContainer}>
-          <View style={[styles.progressBar, { width: `${imageUploadProgressPercent}%` }]} />
+          <View
+            style={[
+              styles.progressBar,
+              { width: `${imageUploadProgressPercent}%` },
+            ]}
+          />
         </View>
       )}
 
-      {/* Action Buttons */}
       <View style={styles.footerButtons}>
-        <TouchableOpacity style={styles.resetBtn} onPress={() => setTitleText("")}>
+        <TouchableOpacity
+          style={styles.resetBtn}
+          onPress={() => setTitleText("")}
+        >
           <Text style={styles.resetBtnText}>Clear</Text>
         </TouchableOpacity>
         <TouchableOpacity
@@ -373,31 +526,36 @@ export default function AddBlogScreen() {
       </View>
 
       <Image
-        source={{ uri: cdnImageUrl || localImageUri || "https://via.placeholder.com/400" }}
+        source={{
+          uri:
+            cdnImageUrl || localImageUri || "https://via.placeholder.com/400",
+        }}
         style={styles.previewCover}
       />
-      
+
       <View style={styles.previewContent}>
         <Text style={styles.previewTitle}>{titleText}</Text>
         <View style={styles.previewMeta}>
-          <Text style={styles.previewAuthor}>{authorName || "Guest Author"}</Text>
+          <Text style={styles.previewAuthor}>
+            {authorName || "Guest Author"}
+          </Text>
           <Text style={styles.previewDate}>• {publishDate.toDateString()}</Text>
         </View>
-        
+
         <View style={styles.markdownWrapper}>
           <Markdown style={markdownStyles}>{markdownBody}</Markdown>
         </View>
       </View>
 
       <View style={styles.footerButtons}>
-        <TouchableOpacity style={styles.backBtn} onPress={() => setCurrentStep(1)}>
+        <TouchableOpacity
+          style={styles.backBtn}
+          onPress={() => setCurrentStep(1)}
+        >
           <Ionicons name="arrow-back" size={16} color={COLORS.text} />
           <Text style={styles.backBtnText}>Edit</Text>
         </TouchableOpacity>
-        <TouchableOpacity
-          style={styles.publishBtn}
-          onPress={submitBlog}
-        >
+        <TouchableOpacity style={styles.publishBtn} onPress={submitBlog}>
           {isUploadingImage ? (
             <ActivityIndicator color="#000" />
           ) : (
@@ -417,11 +575,16 @@ export default function AddBlogScreen() {
       >
         <View style={styles.header}>
           <Text style={styles.headerTitle}>New Post</Text>
-          {/* Stepper */}
           <View style={styles.stepper}>
-            <View style={[styles.stepDot, currentStep >= 1 && styles.stepActive]} />
-            <View style={[styles.stepLine, currentStep === 2 && styles.stepActive]} />
-            <View style={[styles.stepDot, currentStep === 2 && styles.stepActive]} />
+            <View
+              style={[styles.stepDot, currentStep >= 1 && styles.stepActive]}
+            />
+            <View
+              style={[styles.stepLine, currentStep === 2 && styles.stepActive]}
+            />
+            <View
+              style={[styles.stepDot, currentStep === 2 && styles.stepActive]}
+            />
           </View>
         </View>
 
@@ -431,14 +594,21 @@ export default function AddBlogScreen() {
 
         <BottomBar />
 
-        {/* Toast Notification */}
         {alertMessage ? (
-          <Animated.View style={[styles.toast, { opacity: alertAnimation, backgroundColor: alertType === "success" ? COLORS.primary : COLORS.danger }]}>
+          <Animated.View
+            style={[
+              styles.toast,
+              {
+                opacity: alertAnimation,
+                backgroundColor:
+                  alertType === "success" ? COLORS.primary : COLORS.danger,
+              },
+            ]}
+          >
             <Text style={styles.toastText}>{alertMessage}</Text>
           </Animated.View>
         ) : null}
 
-        {/* Fullscreen Editor Modal */}
         <Modal
           visible={isEditorFullscreen}
           animationType="slide"
@@ -450,7 +620,7 @@ export default function AddBlogScreen() {
                 <Text style={styles.fsClose}>Done</Text>
               </TouchableOpacity>
               <Text style={styles.fsTitle}>Editor</Text>
-              <View style={{ width: 40 }} /> 
+              <View style={{ width: 40 }} />
             </View>
 
             <KeyboardAvoidingView
@@ -467,7 +637,6 @@ export default function AddBlogScreen() {
                 placeholderTextColor={COLORS.muted}
                 autoFocus={true}
               />
-              {/* Toolbar inside KeyboardAvoidingView to stay above keyboard */}
               <View style={styles.fsToolbarWrapper}>
                 <MarkdownToolbar
                   onInsert={insertMarkdown}
@@ -483,11 +652,10 @@ export default function AddBlogScreen() {
   );
 }
 
+// Styles (identical to your original styles) ------------------------------------------------
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.bg },
   scrollContent: { padding: 16, paddingBottom: 100 },
-  
-  // Header
   header: {
     paddingHorizontal: 20,
     paddingVertical: 15,
@@ -498,13 +666,26 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: COLORS.card,
   },
-  headerTitle: { fontSize: 24, fontWeight: "800", color: COLORS.text, letterSpacing: 0.5 },
+  headerTitle: {
+    fontSize: 24,
+    fontWeight: "800",
+    color: COLORS.text,
+    letterSpacing: 0.5,
+  },
   stepper: { flexDirection: "row", alignItems: "center" },
-  stepDot: { width: 10, height: 10, borderRadius: 5, backgroundColor: COLORS.input },
-  stepLine: { width: 30, height: 2, backgroundColor: COLORS.input, marginHorizontal: 4 },
+  stepDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: COLORS.input,
+  },
+  stepLine: {
+    width: 30,
+    height: 2,
+    backgroundColor: COLORS.input,
+    marginHorizontal: 4,
+  },
   stepActive: { backgroundColor: COLORS.primary },
-
-  // Card
   card: {
     backgroundColor: COLORS.card,
     borderRadius: 16,
@@ -515,7 +696,13 @@ const styles = StyleSheet.create({
     shadowRadius: 5,
     elevation: 5,
   },
-  label: { color: COLORS.muted, fontSize: 13, fontWeight: "600", marginBottom: 8, textTransform: "uppercase" },
+  label: {
+    color: COLORS.muted,
+    fontSize: 13,
+    fontWeight: "600",
+    marginBottom: 8,
+    textTransform: "uppercase",
+  },
   input: {
     backgroundColor: COLORS.input,
     color: COLORS.text,
@@ -526,8 +713,6 @@ const styles = StyleSheet.create({
   },
   titleInput: { fontSize: 18, fontWeight: "bold" },
   row: { flexDirection: "row", justifyContent: "space-between" },
-  
-  // Picker & Date
   pickerContainer: {
     backgroundColor: COLORS.input,
     borderRadius: 8,
@@ -544,8 +729,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   dateBtnText: { color: COLORS.text, fontWeight: "500" },
-
-  // Editor
   editorContainer: {
     borderColor: COLORS.border,
     borderWidth: 1,
@@ -562,8 +745,6 @@ const styles = StyleSheet.create({
     fontSize: 15,
     lineHeight: 22,
   },
-
-  // Toolbar
   toolbarContainer: {
     flexDirection: "row",
     backgroundColor: "#252f3f",
@@ -580,8 +761,6 @@ const styles = StyleSheet.create({
   },
   toolBtnText: { color: COLORS.primary, fontWeight: "bold", fontSize: 14 },
   fullscreenBtn: { padding: 6, marginLeft: "auto" },
-
-  // Image Upload
   uploadArea: {
     height: 140,
     backgroundColor: COLORS.input,
@@ -596,11 +775,20 @@ const styles = StyleSheet.create({
   uploadPlaceholder: { alignItems: "center" },
   uploadText: { color: COLORS.muted, marginTop: 8 },
   uploadedImage: { width: "100%", height: "100%" },
-  progressContainer: { height: 4, backgroundColor: COLORS.border, borderRadius: 2, marginTop: 8, overflow: 'hidden' },
+  progressContainer: {
+    height: 4,
+    backgroundColor: COLORS.border,
+    borderRadius: 2,
+    marginTop: 8,
+    overflow: "hidden",
+  },
   progressBar: { height: "100%", backgroundColor: COLORS.primary },
-
-  // Footer Buttons
-  footerButtons: { flexDirection: "row", marginTop: 24, justifyContent: "flex-end", alignItems: "center" },
+  footerButtons: {
+    flexDirection: "row",
+    marginTop: 24,
+    justifyContent: "flex-end",
+    alignItems: "center",
+  },
   resetBtn: { marginRight: 16 },
   resetBtnText: { color: COLORS.muted },
   nextBtn: {
@@ -613,24 +801,45 @@ const styles = StyleSheet.create({
   },
   nextBtnText: { color: "#000", fontWeight: "700", marginRight: 6 },
   disabledBtn: { opacity: 0.5 },
-
-  // Preview Styles
-  previewHeader: { flexDirection: "row", justifyContent: "space-between", marginBottom: 16 },
+  previewHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    marginBottom: 16,
+  },
   previewLabel: { color: COLORS.primary, fontWeight: "bold", letterSpacing: 1 },
-  previewCover: { width: "100%", height: 200, borderRadius: 12, marginBottom: 16 },
+  previewCover: {
+    width: "100%",
+    height: 200,
+    borderRadius: 12,
+    marginBottom: 16,
+  },
   previewContent: { paddingHorizontal: 4 },
-  previewTitle: { color: COLORS.text, fontSize: 26, fontWeight: "bold", marginBottom: 8 },
+  previewTitle: {
+    color: COLORS.text,
+    fontSize: 26,
+    fontWeight: "bold",
+    marginBottom: 8,
+  },
   previewMeta: { flexDirection: "row", marginBottom: 16 },
   previewAuthor: { color: COLORS.primary, fontWeight: "600", marginRight: 6 },
   previewDate: { color: COLORS.muted },
   markdownWrapper: { marginTop: 10 },
-  
-  backBtn: { flexDirection: "row", alignItems: "center", marginRight: 16, backgroundColor: COLORS.input, padding: 10, borderRadius: 8 },
+  backBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginRight: 16,
+    backgroundColor: COLORS.input,
+    padding: 10,
+    borderRadius: 8,
+  },
   backBtnText: { color: COLORS.text, fontWeight: "600", marginLeft: 6 },
-  publishBtn: { backgroundColor: COLORS.primary, paddingVertical: 12, paddingHorizontal: 24, borderRadius: 10 },
+  publishBtn: {
+    backgroundColor: COLORS.primary,
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    borderRadius: 10,
+  },
   publishBtnText: { color: "#000", fontWeight: "800" },
-
-  // Fullscreen Modal
   fsContainer: { flex: 1, backgroundColor: COLORS.bg },
   fsHeader: {
     flexDirection: "row",
@@ -650,12 +859,10 @@ const styles = StyleSheet.create({
     lineHeight: 24,
   },
   fsToolbarWrapper: {
-    backgroundColor: COLORS.bg, 
-    borderTopWidth: 1, 
-    borderTopColor: COLORS.border 
+    backgroundColor: COLORS.bg,
+    borderTopWidth: 1,
+    borderTopColor: COLORS.border,
   },
-
-  // Toast
   toast: {
     position: "absolute",
     bottom: 90,
@@ -671,13 +878,43 @@ const styles = StyleSheet.create({
   toastText: { color: "#000", fontWeight: "700" },
 });
 
-// --- Markdown Renderer Styles ---
 const markdownStyles = StyleSheet.create({
   body: { color: "#D1D5DB", fontSize: 16, lineHeight: 24 },
-  heading1: { color: COLORS.text, fontSize: 24, marginTop: 20, marginBottom: 10, fontWeight: "bold" },
-  heading2: { color: COLORS.text, fontSize: 20, marginTop: 16, marginBottom: 8, fontWeight: "bold" },
+  heading1: {
+    color: COLORS.text,
+    fontSize: 24,
+    marginTop: 20,
+    marginBottom: 10,
+    fontWeight: "bold",
+  },
+  heading2: {
+    color: COLORS.text,
+    fontSize: 20,
+    marginTop: 16,
+    marginBottom: 8,
+    fontWeight: "bold",
+  },
   link: { color: COLORS.primary, textDecorationLine: "underline" },
-  code_inline: { backgroundColor: "#111827", color: "#F472B6", borderRadius: 4, paddingHorizontal: 4 },
-  code_block: { backgroundColor: "#111827", padding: 10, borderRadius: 8, marginVertical: 8, borderWidth: 1, borderColor: "#374151" },
-  blockquote: { borderLeftWidth: 4, borderLeftColor: COLORS.primary, paddingLeft: 10, marginVertical: 8, fontStyle: "italic", color: COLORS.muted },
+  code_inline: {
+    backgroundColor: "#111827",
+    color: "#F472B6",
+    borderRadius: 4,
+    paddingHorizontal: 4,
+  },
+  code_block: {
+    backgroundColor: "#111827",
+    padding: 10,
+    borderRadius: 8,
+    marginVertical: 8,
+    borderWidth: 1,
+    borderColor: "#374151",
+  },
+  blockquote: {
+    borderLeftWidth: 4,
+    borderLeftColor: COLORS.primary,
+    paddingLeft: 10,
+    marginVertical: 8,
+    fontStyle: "italic",
+    color: COLORS.muted,
+  },
 });
