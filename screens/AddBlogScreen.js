@@ -217,7 +217,7 @@ export default function AddBlogScreen() {
     const sigData = await sigRes.json();
 
     const formData = new FormData();
-    // This now sends the actual bits and bytes of the image, not the URL string
+   
     formData.append("file", fileToUpload); 
     formData.append("api_key", sigData.apiKey);
     formData.append("timestamp", String(sigData.timestamp));
@@ -295,7 +295,7 @@ export default function AddBlogScreen() {
         author: authorName,
       };
 
-      const res = await secureFetch("/api/blogs", {
+      const res = await secureFetch("/api/blogs/create-blog", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
