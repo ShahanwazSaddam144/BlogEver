@@ -68,41 +68,39 @@ export default function AuthScreen({ navigation }) {
 
   // 🔹 LOGIN
   const handleLogin = async () => {
-    if (!email || !password) {
-      showPopup("Please fill all fields");
-      return;
+  if (!email || !password) {
+    showPopup("Please fill all fields");
+    return;
+  }
+
+  setLoading(true);
+  try {
+    const res = await secureFetch("/api/auth/login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: "" },
+      body: JSON.stringify({ email, password }),
+    });
+
+    const data = await res.json();
+
+    if (res.status === 200) {
+      const { user, accessToken, refreshToken } = data;
+
+      if (user) await AsyncStorage.setItem("user", JSON.stringify(user));
+      if (accessToken) await AsyncStorage.setItem("accessToken", accessToken);
+      if (refreshToken) await AsyncStorage.setItem("refreshToken", refreshToken);
+
+      navigation.replace("HomeScreen");
+    } else {
+      showPopup(data.message || "Invalid credentials");
     }
-
-    setLoading(true);
-    try {
-        const res = await secureFetch("/api/auth/login", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: "",
-        },
-        body: JSON.stringify({email, password }),
-      });
-
-      const data = await res.json();
-
-      if (res.status === 200) {
-        const { user, accessToken, refreshToken } = data;
-        await AsyncStorage.setItem("user", JSON.stringify(user));
-        await AsyncStorage.setItem("accessToken", accessToken);
-        await AsyncStorage.setItem("refreshToken", refreshToken);
-
-        navigation.replace("HomeScreen");
-      } else {
-        showPopup(data.message || "Invalid credentials");
-      }
-    } catch (err) {
-      showPopup("Server not reachable");
-      console.log(err);
-    } finally {
-      setLoading(false);
-    }
-  };
+  } catch (err) {
+    showPopup("Server not reachable");
+    console.log(err);
+  } finally {
+    setLoading(false);
+  }
+};
 
   return (
     <View style={styles.container}>
