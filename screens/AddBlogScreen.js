@@ -297,7 +297,11 @@ export default function AddBlogScreen() {
 
       const res = await secureFetch("/api/blogs/create-blog", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { 
+          "Content-Type": "application/json",
+          "Authorization": ""
+
+         },
         body: JSON.stringify(payload),
       });
 

@@ -16,7 +16,7 @@ export default function WelcomeScreen({ navigation }) {
 
   const checkLogin = async () => {
     try {
-      const token = await AsyncStorage.getItem("token");
+      const token = await AsyncStorage.getItem("accessToken");
       if (token) {
         navigation.replace("HomeScreen");
       } else {
@@ -32,7 +32,6 @@ export default function WelcomeScreen({ navigation }) {
     <View style={styles.container}>
       <StatusBar style="light" />
 
-      {/* Logo */}
       <Image
         source={require("../assets/butt.png")}
         style={styles.logo}

@@ -69,7 +69,6 @@ export async function secureFetch(endpoint, options = {}) {
     }
   }
 
-  // Add headers
   options.headers = {
     ...(options.headers || {}),
     Authorization: accessToken ? `Bearer ${accessToken}` : '',
