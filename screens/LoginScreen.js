@@ -41,7 +41,6 @@ export default function AuthScreen({ navigation }) {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: "",
         },
         body: JSON.stringify({ name, email, password }),
       });
@@ -75,24 +74,27 @@ export default function AuthScreen({ navigation }) {
 
     setLoading(true);
     try {
-        const res = await secureFetch("/api/auth/login", {
+      const res = await secureFetch("/api/auth/login", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: "",
         },
-        body: JSON.stringify({email, password }),
+        body: JSON.stringify({ email, password }),
       });
 
       const data = await res.json();
-
       if (res.status === 200) {
         const { user, accessToken, refreshToken } = data;
-        await AsyncStorage.setItem("user", JSON.stringify(user));
-        await AsyncStorage.setItem("accessToken", accessToken);
-        await AsyncStorage.setItem("refreshToken", refreshToken);
+        await AsyncStorage.multiSet([
+          ["user", JSON.stringify(user)],
+          ["accessToken", accessToken],
+          ["refreshToken", refreshToken],
+        ]);
 
-        navigation.replace("HomeScreen");
+        navigation.reset({
+          index: 0,
+          routes: [{ name: "HomeScreen" }],
+        });
       } else {
         showPopup(data.message || "Invalid credentials");
       }

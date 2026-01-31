@@ -38,6 +38,7 @@ export default function HomeScreen({ navigation }) {
   useEffect(() => {
     getUser();
     fetchFirstPage();
+    
   }, []);
 
   const getUser = async () => {

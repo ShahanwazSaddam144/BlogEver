@@ -155,18 +155,17 @@ export default function ProfileScreen({ navigation }) {
   };
 
   const loadToken = async () => {
-    const token = await AsyncStorage.getItem("token");
-    if (!token) navigation.replace("LoginScreen");
+    const token = await AsyncStorage.getItem("refreshToken");
+    if (!token) navigation.replace("Login");
   };
 
-  // Logout functions
   const confirmLogout = async () => {
     setShowLogoutConfirm(false);
     setShowSettingsPopup(false);
     showAlert("Logging out...", "success");
     setTimeout(async () => {
-      await AsyncStorage.multiRemove(["token", "user"]);
-      navigation.replace("LoginScreen");
+      await AsyncStorage.multiRemove(["refreshToken", "user","accesstoken"]);
+      navigation.replace("Login");
     }, 500);
   };
   const cancelLogout = () => setShowLogoutConfirm(false);
@@ -192,10 +191,10 @@ export default function ProfileScreen({ navigation }) {
       const data = await res.json();
 
       if (res.ok) {
-        await AsyncStorage.multiRemove(["token", "user"]);
+        await AsyncStorage.multiRemove(["refreshToken", "user","accesstoken"]);
         showAlert("Account deleted successfully", "success");
         setTimeout(() => {
-          navigation.replace("LoginScreen");
+          navigation.replace("Login");
         }, 1000);
       } else {
         showAlert(data.message || "Failed to delete account", "error");

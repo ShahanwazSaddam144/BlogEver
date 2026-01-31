@@ -13,9 +13,9 @@ export default function BottomBar(navigate) {
 
   useEffect(() => {
     const loadToken = async () => {
-      const token = await AsyncStorage.getItem("token");
+      const token = await AsyncStorage.getItem("refreshToken");
       if (!token) {
-        navigation.replace("LoginScreen");
+        navigation.replace("Login");
       } else {
         setUserToken(token);
       }
