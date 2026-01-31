@@ -41,7 +41,6 @@ export default function AuthScreen({ navigation }) {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: "",
         },
         body: JSON.stringify({ name, email, password }),
       });
@@ -73,34 +72,36 @@ export default function AuthScreen({ navigation }) {
     return;
   }
 
-  setLoading(true);
-  try {
-    const res = await secureFetch("/api/auth/login", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: "" },
-      body: JSON.stringify({ email, password }),
-    });
+    setLoading(true);
+    try {
+        const res = await secureFetch("/api/auth/login", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: "",
+        },
+        body: JSON.stringify({email, password }),
+      });
 
-    const data = await res.json();
+      const data = await res.json();
 
-    if (res.status === 200) {
-      const { user, accessToken, refreshToken } = data;
+      if (res.status === 200) {
+        const { user, accessToken, refreshToken } = data;
+        await AsyncStorage.setItem("user", JSON.stringify(user));
+        await AsyncStorage.setItem("accessToken", accessToken);
+        await AsyncStorage.setItem("refreshToken", refreshToken);
 
-      if (user) await AsyncStorage.setItem("user", JSON.stringify(user));
-      if (accessToken) await AsyncStorage.setItem("accessToken", accessToken);
-      if (refreshToken) await AsyncStorage.setItem("refreshToken", refreshToken);
-
-      navigation.replace("HomeScreen");
-    } else {
-      showPopup(data.message || "Invalid credentials");
+        navigation.replace("HomeScreen");
+      } else {
+        showPopup(data.message || "Invalid credentials");
+      }
+    } catch (err) {
+      showPopup("Server not reachable");
+      console.log(err);
+    } finally {
+      setLoading(false);
     }
-  } catch (err) {
-    showPopup("Server not reachable");
-    console.log(err);
-  } finally {
-    setLoading(false);
-  }
-};
+  };
 
   return (
     <View style={styles.container}>

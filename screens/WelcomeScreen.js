@@ -16,15 +16,15 @@ export default function WelcomeScreen({ navigation }) {
 
   const checkLogin = async () => {
     try {
-      const token = await AsyncStorage.getItem("accessToken");
+      const token = await AsyncStorage.getItem("refreshToken");
       if (token) {
         navigation.replace("HomeScreen");
       } else {
-        navigation.replace("LoginScreen");
+        navigation.replace("Login");
       }
     } catch (err) {
       console.log("Error checking login:", err);
-      navigation.replace("LoginScreen");
+      navigation.replace("Login");
     }
   };
 

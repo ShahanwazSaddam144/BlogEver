@@ -3,7 +3,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { jwtDecode } from 'jwt-decode';
 let isRefreshing = false;
 
-// List of functions waiting for the refreshed token
+
 let waitingRequestsQueue = [];
 
 
@@ -36,7 +36,7 @@ export async function secureFetch(endpoint, options = {}) {
       isRefreshing = true;
 
       const refreshToken = await AsyncStorage.getItem('refreshToken');
-
+      console.log(refreshToken)
       const response = await fetch(`${API_BASE_URL}/api/authrefresh`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
