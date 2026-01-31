@@ -4,11 +4,15 @@ import {
   StyleSheet,
   ActivityIndicator,
   ScrollView,
+  Image,
+  TouchableOpacity, // <--- Import this
 } from "react-native";
 import { useEffect, useState } from "react";
 import BottomBar from "../components/BottomBar";
+import { secureFetch } from "api/apiClient";
+import { Ionicons } from "@expo/vector-icons";
 
-export default function FullBlogScreen({ route }) {
+export default function FullBlogScreen({ route, navigation }) {
   const { blogId } = route.params;
 
   const [blog, setBlog] = useState(null);
@@ -22,17 +26,13 @@ export default function FullBlogScreen({ route }) {
 
   const fetchBlog = async () => {
     try {
-      const res = await fetch(
-        `http://192.168.100.77:5000/api/blogs/${blogId}`
-      );
+      const res = await secureFetch(`/api/blogs/${blogId}`);
 
       if (!res.ok) {
         throw new Error("Blog not found");
       }
 
       const data = await res.json();
-
-      // backend returns { blog }
       setBlog(data.blog);
     } catch (err) {
       console.log("Fetch blog error:", err.message);
@@ -59,40 +59,91 @@ export default function FullBlogScreen({ route }) {
   }
 
   return (
-    <>
+    <View style={{ flex: 1, backgroundColor: "#000" }}>
       <ScrollView
         style={styles.container}
-        contentContainerStyle={{ paddingBottom: 30 }}
+        contentContainerStyle={{ paddingBottom: 100 }}
+        showsVerticalScrollIndicator={false}
       >
-        {/* Blog Title */}
-        <Text style={styles.blogTitle}>{blog.name}</Text>
-
-        {/* Author & Date */}
-        <View style={styles.blogMeta}>
-          <Text style={styles.blogAuthor}>
-            By {blog.createdby || "Unknown"}
-          </Text>
-          <Text style={styles.blogDate}>
-            {blog.publishedAt
-              ? new Date(blog.publishedAt).toDateString()
-              : ""}
-          </Text>
-        </View>
-
-        {/* Category */}
-        {blog.category && (
-          <View style={styles.blogCategoryContainer}>
-            <Text style={styles.categoryLabel}>Category:</Text>
-            <Text style={styles.blogCategory}>{blog.category}</Text>
-          </View>
+        {/* --- Hero Image --- */}
+        {blog.image?.url ? (
+          <Image
+            source={{ uri: blog.image.url }}
+            style={styles.heroImage}
+            resizeMode="cover"
+          />
+        ) : (
+          <View style={styles.placeholderHeader} />
         )}
 
-        {/* Full Description */}
-        <Text style={styles.blogDesc}>{blog.desc}</Text>
+        <View style={styles.contentContainer}>
+          {/* Category Chip */}
+          {blog.category && (
+            <View style={styles.categoryWrapper}>
+              <Text style={styles.categoryText}>
+                {blog.category.toUpperCase()}
+              </Text>
+            </View>
+          )}
+
+          {/* Title */}
+          <Text style={styles.blogTitle}>{blog.name}</Text>
+
+          {/* Meta Data */}
+          <View style={styles.metaContainer}>
+            <View style={styles.authorRow}>
+              <View style={styles.avatarPlaceholder}>
+                <Text style={styles.avatarText}>
+                  {blog.createdby?.charAt(0).toUpperCase() || "A"}
+                </Text>
+              </View>
+              <View>
+                <Text style={styles.blogAuthor}>
+                  {blog.createdby || "Unknown Author"}
+                </Text>
+                <Text style={styles.blogDate}>
+                  {blog.publishedAt
+                    ? new Date(blog.publishedAt).toLocaleDateString(undefined, {
+                        year: "numeric",
+                        month: "long",
+                        day: "numeric",
+                      })
+                    : "Draft"}
+                </Text>
+              </View>
+            </View>
+          </View>
+
+          <View style={styles.divider} />
+
+          {/* Description */}
+          <Text style={styles.blogDesc}>{blog.desc}</Text>
+        </View>
       </ScrollView>
 
+   
+      <View style={styles.breadcrumbContainer}>
+        <TouchableOpacity
+          onPress={() => navigation.goBack()} 
+          style={styles.breadcrumbLink}
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+        >
+          <Ionicons
+            name="arrow-back"
+            size={20}
+            color="#fff"
+            style={{ marginRight: 5 }}
+          />
+          <Text style={styles.breadcrumbTextActive}>Home</Text>
+        </TouchableOpacity>
+
+        <Text style={styles.breadcrumbSeparator}> &gt; </Text>
+
+        <Text style={styles.breadcrumbTextInactive}>Blog</Text>
+      </View>
+
       <BottomBar />
-    </>
+    </View>
   );
 }
 
@@ -100,8 +151,6 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: "#000",
-    paddingHorizontal: 15,
-    paddingTop: 20,
   },
   center: {
     flex: 1,
@@ -109,49 +158,131 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
   },
-  notFoundText: {
-    color: "#fff",
-    fontSize: 16,
-  },
-  blogTitle: {
-    color: "#fff",
-    fontSize: 24,
-    fontWeight: "bold",
-    marginBottom: 12,
-  },
-  blogMeta: {
+  notFoundText: { color: "#fff", fontSize: 16 },
+
+  breadcrumbContainer: {
+    position: "fixed",
+    top: 10, 
+    left: 20,
     flexDirection: "row",
-    justifyContent: "space-between",
-    marginBottom: 10,
+    paddingVertical: 8,
+  paddingHorizontal: 12,
+    alignItems: "center",
+    backgroundColor: "rgba(0,0,0,0.6)", // Semi-transparent background for readability
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 20,
+    zIndex: 10, 
   },
-  blogAuthor: {
-    color: "#2ecc71",
+  breadcrumbLink: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  breadcrumbTextActive: {
+    color: "#fff",
     fontWeight: "bold",
     fontSize: 14,
   },
-  blogDate: {
-    color: "#777",
-    fontSize: 12,
+  breadcrumbSeparator: {
+    color: "#888",
+    fontSize: 14,
+    marginHorizontal: 5,
   },
-  blogCategoryContainer: {
+  breadcrumbTextInactive: {
+    color: "#aaa", // Dimmed color for current page
+    fontSize: 14,
+  },
+
+  // Hero Image
+  heroImage: {
+    width: "100%",
+    height: 300, 
+    backgroundColor: "#1a1a1a",
+  },
+  placeholderHeader: {
+    width: "100%",
+    height: 100,
+    backgroundColor: "#000",
+  },
+  contentContainer: {
+    paddingHorizontal: 20,
+    marginTop: -30,
+    backgroundColor: "#000",
+    borderTopLeftRadius: 30,
+    borderTopRightRadius: 30,
+    paddingTop: 30,
+    minHeight: 500, // Ensures black bg covers bottom if content is short
+  },
+  // Category
+  categoryWrapper: {
+    alignSelf: "flex-start",
+    backgroundColor: "rgba(46, 204, 113, 0.15)",
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 6,
+    marginBottom: 10,
+    borderWidth: 1,
+    borderColor: "rgba(46, 204, 113, 0.3)",
+  },
+  categoryText: {
+    color: "#2ecc71",
+    fontSize: 12,
+    fontWeight: "700",
+    letterSpacing: 1,
+  },
+  // Typography
+  blogTitle: {
+    color: "#fff",
+    fontSize: 28,
+    fontWeight: "800",
+    lineHeight: 34,
+    marginBottom: 20,
+  },
+  // Meta
+  metaContainer: {
     flexDirection: "row",
     alignItems: "center",
-    marginBottom: 15,
+    marginBottom: 20,
   },
-  categoryLabel: {
+  authorRow: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  avatarPlaceholder: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: "#333",
+    justifyContent: "center",
+    alignItems: "center",
+    marginRight: 12,
+    borderWidth: 1,
+    borderColor: "#444",
+  },
+  avatarText: {
     color: "#ccc",
     fontWeight: "bold",
-    marginRight: 6,
-    fontSize: 13,
+    fontSize: 18,
   },
-  blogCategory: {
-    color: "#2ecc71",
-    fontWeight: "bold",
+  blogAuthor: {
+    color: "#fff",
+    fontWeight: "600",
+    fontSize: 15,
+  },
+  blogDate: {
+    color: "#888",
     fontSize: 13,
+    marginTop: 2,
+  },
+  divider: {
+    height: 1,
+    backgroundColor: "#222",
+    marginBottom: 25,
   },
   blogDesc: {
-    color: "#aaa",
-    fontSize: 15,
-    lineHeight: 22,
+    color: "#ddd",
+    fontSize: 17,
+    lineHeight: 28,
+    fontWeight: "400",
   },
 });

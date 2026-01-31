@@ -6,6 +6,7 @@ import {
   TouchableOpacity,
   ScrollView,
   Animated,
+  Image, // <--- 1. Import Image
 } from "react-native";
 import { useState, useEffect, useRef } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -101,6 +102,7 @@ export default function ProfileScreen({ navigation }) {
       const token = await AsyncStorage.getItem("token");
       if (!token) return;
 
+      // Update IP if needed
       const res = await fetch("http://192.168.100.77:5000/api/profile", {
         headers: { Authorization: `Bearer ${token}` },
       });
@@ -164,13 +166,12 @@ export default function ProfileScreen({ navigation }) {
     setShowSettingsPopup(false);
     showAlert("Logging out...", "success");
     setTimeout(async () => {
-      await AsyncStorage.multiRemove(["refreshToken", "user","accesstoken"]);
+      await AsyncStorage.multiRemove(["refreshToken", "user", "accesstoken"]);
       navigation.replace("Login");
     }, 500);
   };
   const cancelLogout = () => setShowLogoutConfirm(false);
 
-  // Delete account function
   const confirmDeleteAccount = async () => {
     setShowDeleteConfirm(false);
     setShowSettingsPopup(false);
@@ -191,7 +192,7 @@ export default function ProfileScreen({ navigation }) {
       const data = await res.json();
 
       if (res.ok) {
-        await AsyncStorage.multiRemove(["refreshToken", "user","accesstoken"]);
+        await AsyncStorage.multiRemove(["refreshToken", "user", "accesstoken"]);
         showAlert("Account deleted successfully", "success");
         setTimeout(() => {
           navigation.replace("Login");
@@ -243,7 +244,6 @@ export default function ProfileScreen({ navigation }) {
     }
   };
 
-  // Trigger the confirmation popup
   const confirmDeleteBlog = (id) => {
     setBlogToDelete(id);
     setShowDeleteBlogConfirm(true);
@@ -360,54 +360,55 @@ export default function ProfileScreen({ navigation }) {
           {blogs.length === 0 ? (
             <Text style={{ color: "#888", marginTop: 10 }}>No blogs yet.</Text>
           ) : (
-            <View style={{ height: 300, marginTop: 15 }}>
+            <View style={{ height: 450, marginTop: 15 }}>
+              {/* Increased height to fit image */}
               <Swiper
                 showsPagination={true}
                 autoplay={false}
                 loop={false}
                 activeDotColor="#2ecc71"
                 dotColor="#555"
+                // --- 2. Lazy Loading Props ---
+                loadMinimal={true}
+                loadMinimalSize={2}
+                removeClippedSubviews={true}
+                // -----------------------------
               >
                 {blogs.map((blog) => (
-                  <View
-                    key={blog._id}
-                    style={{
-                      backgroundColor: "#111",
-                      borderRadius: 15,
-                      marginHorizontal: 10,
-                      padding: 15,
-                      flex: 1,
-                      justifyContent: "space-between",
-                    }}
-                  >
-                    <Text
-                      style={{
-                        color: "#fff",
-                        fontWeight: "bold",
-                        fontSize: 16,
+                  <View key={blog._id} style={styles.cardContainer}>
+                    {/* --- 3. The Image Component --- */}
+                    {/* Fallback to placeholder if blog.image is missing */}
+                    <Image
+                      source={{
+                        uri:
+                          blog.image ||
+                          "https://placehold.co/600x400/222/FFF.png?text=No+Image",
                       }}
+                      style={styles.cardImage}
+                      resizeMode="cover"
+                    />
+
+                    <Text style={styles.cardTitle}>{blog.name}</Text>
+
+                    <Text
+                      style={styles.cardDesc}
+                      numberOfLines={3}
+                      ellipsizeMode="tail"
                     >
-                      {blog.name}
-                    </Text>
-                    <Text style={{ color: "#aaa", marginVertical: 5 }} numberOfLines={5} ellipsizeMode="tail">
                       {blog.desc}
                     </Text>
+
                     <View style={styles.blogcategoryContainer}>
                       <Text style={styles.categoryHeading}>Category:</Text>
                       <Text style={styles.blogCategory}>{blog.category}</Text>
                     </View>
+
                     <Text style={{ color: "#888", fontSize: 12 }}>
                       {new Date(blog.publishedAt).toDateString()}
                     </Text>
 
                     <TouchableOpacity
-                      style={{
-                        marginTop: 10,
-                        backgroundColor: "#e74c3c",
-                        padding: 8,
-                        borderRadius: 10,
-                        alignItems: "center",
-                      }}
+                      style={styles.deleteButton}
                       onPress={() => confirmDeleteBlog(blog._id)}
                     >
                       <Text style={{ color: "#fff", fontWeight: "bold" }}>
@@ -516,7 +517,6 @@ export default function ProfileScreen({ navigation }) {
   );
 }
 
-// Styles remain unchanged
 const styles = StyleSheet.create({
   container: {
     flexGrow: 1,
@@ -677,13 +677,50 @@ const styles = StyleSheet.create({
     marginTop: 20,
     justifyContent: "center",
     alignItems: "center",
+    width: "100%", // Ensure container takes full width
   },
   BlogText: {
     color: "white",
     fontSize: 20,
     fontWeight: "bold",
   },
-    blogcategoryContainer: {
+  // --- New/Updated Styles for Card & Image ---
+  cardContainer: {
+    backgroundColor: "#111",
+    borderRadius: 15,
+    marginHorizontal: 10,
+    padding: 15,
+    flex: 1,
+    // justifyContent: "space-between", // removed to let items stack naturally
+    marginBottom: 40, // space for dots
+  },
+  cardImage: {
+    width: "100%",
+    height: 180, // Fixed height keeps text aligned
+    borderRadius: 10,
+    marginBottom: 10,
+    backgroundColor: "#222", // Loading placeholder color
+  },
+  cardTitle: {
+    color: "#fff",
+    fontWeight: "bold",
+    fontSize: 16,
+    marginBottom: 5,
+  },
+  cardDesc: {
+    color: "#aaa",
+    marginVertical: 5,
+    flexShrink: 1, // Ensures text shrinks if image pushes it
+  },
+  deleteButton: {
+    marginTop: 10,
+    backgroundColor: "#e74c3c",
+    padding: 8,
+    borderRadius: 10,
+    alignItems: "center",
+    alignSelf: "stretch", // Full width button
+  },
+  blogcategoryContainer: {
     flexDirection: "row",
     alignItems: "center",
     flexWrap: "wrap",
