@@ -1,3 +1,4 @@
+import React, { useEffect, useState } from "react";
 import {
   View,
   Text,
@@ -5,12 +6,15 @@ import {
   ActivityIndicator,
   ScrollView,
   Image,
-  TouchableOpacity, // <--- Import this
+  TouchableOpacity,
+  Dimensions,
 } from "react-native";
-import { useEffect, useState } from "react";
 import BottomBar from "../components/BottomBar";
 import { secureFetch } from "api/apiClient";
 import { Ionicons } from "@expo/vector-icons";
+import Markdown from "react-native-markdown-display";
+
+const { width: SCREEN_WIDTH } = Dimensions.get("window");
 
 export default function FullBlogScreen({ route, navigation }) {
   const { blogId } = route.params;
@@ -65,6 +69,27 @@ export default function FullBlogScreen({ route, navigation }) {
         contentContainerStyle={{ paddingBottom: 100 }}
         showsVerticalScrollIndicator={false}
       >
+        {/* --- Breadcrumb (kept in layout flow) --- */}
+        <View style={styles.breadcrumbContainer}>
+          <TouchableOpacity
+            onPress={() => navigation.goBack()}
+            style={styles.breadcrumbLink}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          >
+            <Ionicons
+              name="arrow-back"
+              size={20}
+              color="#fff"
+              style={{ marginRight: 5 }}
+            />
+            <Text style={styles.breadcrumbTextActive}>Home</Text>
+          </TouchableOpacity>
+
+          <Text style={styles.breadcrumbSeparator}> &gt; </Text>
+
+          <Text style={styles.breadcrumbTextInactive}>Blog</Text>
+        </View>
+
         {/* --- Hero Image --- */}
         {blog.image?.url ? (
           <Image
@@ -116,36 +141,59 @@ export default function FullBlogScreen({ route, navigation }) {
 
           <View style={styles.divider} />
 
-          {/* Description */}
-          <Text style={styles.blogDesc}>{blog.desc}</Text>
+          {/* Description rendered as Markdown */}
+          <View style={{ marginBottom: 30 }}>
+            <Markdown
+              style={markdownStyles}
+              // You can add rules or onLinkPress etc. if needed
+            >
+              {blog.desc || ""}
+            </Markdown>
+          </View>
         </View>
       </ScrollView>
-
-   
-      <View style={styles.breadcrumbContainer}>
-        <TouchableOpacity
-          onPress={() => navigation.goBack()} 
-          style={styles.breadcrumbLink}
-          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-        >
-          <Ionicons
-            name="arrow-back"
-            size={20}
-            color="#fff"
-            style={{ marginRight: 5 }}
-          />
-          <Text style={styles.breadcrumbTextActive}>Home</Text>
-        </TouchableOpacity>
-
-        <Text style={styles.breadcrumbSeparator}> &gt; </Text>
-
-        <Text style={styles.breadcrumbTextInactive}>Blog</Text>
-      </View>
 
       <BottomBar />
     </View>
   );
 }
+
+const markdownStyles = {
+  body: {
+    color: "#ddd",
+    fontSize: 17,
+    lineHeight: 28,
+    fontWeight: "400",
+  },
+  heading1: {
+    color: "#fff",
+    fontSize: 28,
+    marginBottom: 8,
+  },
+  heading2: {
+    color: "#fff",
+    fontSize: 22,
+    marginBottom: 6,
+  },
+  link: {
+    color: "#2ecc71",
+  },
+  image: {
+    // ensure markdown images fit nicely
+    width: SCREEN_WIDTH - 40,
+    height: (SCREEN_WIDTH - 40) * 0.56, // approximate 16:9
+    resizeMode: "cover",
+    marginVertical: 12,
+    borderRadius: 10,
+  },
+  code_block: {
+    backgroundColor: "#111",
+    color: "#0f0",
+    padding: 12,
+    borderRadius: 6,
+  },
+  // you can override more rule keys — see package docs
+};
 
 const styles = StyleSheet.create({
   container: {
@@ -161,18 +209,17 @@ const styles = StyleSheet.create({
   notFoundText: { color: "#fff", fontSize: 16 },
 
   breadcrumbContainer: {
-    position: "fixed",
-    top: 10, 
-    left: 20,
+    // NOTE: `position: "fixed"` is invalid in RN — use "absolute" if you want overlay.
+    // Keeping it in layout flow so it sits above image (you used to want that).
     flexDirection: "row",
-    paddingVertical: 8,
-  paddingHorizontal: 12,
     alignItems: "center",
-    backgroundColor: "rgba(0,0,0,0.6)", // Semi-transparent background for readability
+    backgroundColor: "rgba(0,0,0,0.6)",
     paddingVertical: 8,
     paddingHorizontal: 12,
     borderRadius: 20,
-    zIndex: 10, 
+    marginHorizontal: 20,
+    marginTop: 20,
+    alignSelf: "flex-start",
   },
   breadcrumbLink: {
     flexDirection: "row",
@@ -189,14 +236,14 @@ const styles = StyleSheet.create({
     marginHorizontal: 5,
   },
   breadcrumbTextInactive: {
-    color: "#aaa", // Dimmed color for current page
+    color: "#aaa",
     fontSize: 14,
   },
 
   // Hero Image
   heroImage: {
     width: "100%",
-    height: 300, 
+    height: 300,
     backgroundColor: "#1a1a1a",
   },
   placeholderHeader: {
@@ -211,7 +258,7 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: 30,
     borderTopRightRadius: 30,
     paddingTop: 30,
-    minHeight: 500, // Ensures black bg covers bottom if content is short
+    minHeight: 500,
   },
   // Category
   categoryWrapper: {
@@ -278,11 +325,5 @@ const styles = StyleSheet.create({
     height: 1,
     backgroundColor: "#222",
     marginBottom: 25,
-  },
-  blogDesc: {
-    color: "#ddd",
-    fontSize: 17,
-    lineHeight: 28,
-    fontWeight: "400",
   },
 });
