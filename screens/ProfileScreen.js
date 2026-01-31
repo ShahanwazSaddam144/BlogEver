@@ -143,7 +143,7 @@ export default function ProfileScreen({ navigation }) {
 
   const fetchBlogs = async () => {
     try {
-      const res = await secureFetch("/api/my-blogs");
+      const res = await secureFetch("/api/blogs/my-blogs");
       if (res.ok) {
         const data = await res.json();
         setBlogs(data.blogs || []);
