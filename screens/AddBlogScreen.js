@@ -26,6 +26,7 @@ import { secureFetch } from "api/apiClient";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import Markdown from "react-native-markdown-display";
 import * as FileSystem from "expo-file-system/legacy";
+
 const SCREEN_HEIGHT = Dimensions.get("window").height;
 
 // --- Theme Constants ---
@@ -162,6 +163,39 @@ export default function AddBlogScreen() {
     }
   };
 
+  // SKELETON animation refs
+  const skeletonAnim = useRef(new Animated.Value(0)).current;
+  const skeletonLoopRef = useRef(null);
+
+  useEffect(() => {
+    if (isUploadingImage) {
+      skeletonAnim.setValue(0);
+      skeletonLoopRef.current = Animated.loop(
+        Animated.sequence([
+          Animated.timing(skeletonAnim, {
+            toValue: 1,
+            duration: 700,
+            useNativeDriver: true,
+          }),
+          Animated.timing(skeletonAnim, {
+            toValue: 0,
+            duration: 700,
+            useNativeDriver: true,
+          }),
+        ]),
+      );
+      skeletonLoopRef.current.start();
+    } else {
+      if (skeletonLoopRef.current) {
+        skeletonLoopRef.current.stop();
+        skeletonLoopRef.current = null;
+      }
+    }
+    return () => {
+      if (skeletonLoopRef.current) skeletonLoopRef.current.stop();
+    };
+  }, [isUploadingImage, skeletonAnim]);
+
   // Image handling
   const handlePickImage = async () => {
     try {
@@ -175,10 +209,9 @@ export default function AddBlogScreen() {
         return;
       }
 
-      // Enforcing MediaTypeOptions.Images ensures ONLY images are selectable
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
-        quality: 0.8, // Slightly higher quality
+        quality: 0.8,
         allowsEditing: true,
       });
 
@@ -194,59 +227,7 @@ export default function AddBlogScreen() {
     }
   };
 
- const requestPresignedUrlAndUpload = async (imageUri) => {
-  setIsUploadingImage(true);
-
-  try {
-    let fileToUpload;
-
-    if (Platform.OS === 'web') {
-      // 1. Fetch the actual blob data from the local blob URL
-      const response = await fetch(imageUri);
-      const blob = await response.blob();
-      
-      // 2. Create a file object from the blob
-      fileToUpload = new File([blob], "upload.jpg", { type: blob.type });
-    } else {
-      // Native (Mobile) logic: use the base64 approach we discussed
-      const base64 = await FileSystem.readAsStringAsync(imageUri, { encoding: 'base64' });
-      fileToUpload = `data:image/jpeg;base64,${base64}`;
-    }
-
-    const sigRes = await secureFetch("/api/cloudinary/sign", { method: "GET" });
-    const sigData = await sigRes.json();
-
-    const formData = new FormData();
-   
-    formData.append("file", fileToUpload); 
-    formData.append("api_key", sigData.apiKey);
-    formData.append("timestamp", String(sigData.timestamp));
-    formData.append("signature", sigData.signature);
-    formData.append("folder", sigData.folder);
-    formData.append("upload_preset", "BlogEver");
-
-    const uploadUrl = `https://api.cloudinary.com/v1_1/${sigData.cloudName}/image/upload`;
-
-    const response = await fetch(uploadUrl, {
-      method: "POST",
-      body: formData,
-    });
-
-    const cloudResp = await response.json();
-    if (cloudResp.secure_url) {
-      setImageUploadCompleted(true);
-      setCdnImageUrl(cloudResp.secure_url);
-      showToast("Upload successful!", "success");
-    } else {
-      throw new Error(cloudResp.error?.message || "Upload failed");
-    }
-  } catch (error) {
-    console.error("Upload error:", error);
-    showToast(error.message, "error");
-  } finally {
-    setIsUploadingImage(false);
-  }
-};
+  // XHR upload helper for progress
   const uploadFormDataWithProgress = (uploadUrl, formData) => {
     return new Promise((resolve, reject) => {
       const xhr = new XMLHttpRequest();
@@ -254,7 +235,8 @@ export default function AddBlogScreen() {
 
       xhr.upload.onprogress = (e) => {
         if (e.lengthComputable) {
-          setImageUploadProgressPercent(Math.round((e.loaded / e.total) * 100));
+          const percent = Math.round((e.loaded / e.total) * 100);
+          setImageUploadProgressPercent(percent);
         }
       };
 
@@ -272,8 +254,71 @@ export default function AddBlogScreen() {
       };
 
       xhr.onerror = () => reject(new Error("Network error during upload"));
+
       xhr.send(formData);
     });
+  };
+
+  // Request presigned and upload (handles web vs native)
+  const requestPresignedUrlAndUpload = async (imageUri) => {
+    setIsUploadingImage(true);
+    setImageUploadProgressPercent(0);
+    setImageUploadCompleted(false);
+
+    try {
+      let fileToUpload;
+
+      if (Platform.OS === "web") {
+        // fetch blob and convert to File
+        const response = await fetch(imageUri);
+        const blob = await response.blob();
+        const filename = (imageUri.split("/").pop() || "upload.jpg").split(
+          "?",
+        )[0];
+        fileToUpload = new File([blob], filename, {
+          type: blob.type || "image/jpeg",
+        });
+      } else {
+        // mobile: read base64 and pass data URI to Cloudinary
+        const base64 = await FileSystem.readAsStringAsync(imageUri, {
+          encoding: "base64",
+        });
+        fileToUpload = `data:${getMimeFromFilename(imageUri)};base64,${base64}`;
+      }
+
+      const sigRes = await secureFetch("/api/cloudinary/sign", {
+        method: "GET",
+      });
+      if (!sigRes.ok) throw new Error("Failed to get upload signature");
+      const sigData = await sigRes.json();
+
+      const formData = new FormData();
+      formData.append("file", fileToUpload);
+      formData.append("api_key", sigData.apiKey);
+      formData.append("timestamp", String(sigData.timestamp));
+      formData.append("signature", sigData.signature);
+      if (sigData.folder) formData.append("folder", sigData.folder);
+      formData.append("upload_preset", "BlogEver");
+
+      const uploadUrl = `https://api.cloudinary.com/v1_1/${sigData.cloudName}/image/upload`;
+
+      // Use XHR helper for progress
+      const cloudResp = await uploadFormDataWithProgress(uploadUrl, formData);
+
+      if (cloudResp && cloudResp.secure_url) {
+        setImageUploadCompleted(true);
+        setCdnImageUrl(cloudResp.secure_url);
+        showToast("Upload successful!", "success");
+      } else {
+        throw new Error(cloudResp?.error?.message || "Upload failed");
+      }
+    } catch (error) {
+      console.error("Upload error:", error);
+      showToast(error.message || "Upload failed", "error");
+    } finally {
+      setIsUploadingImage(false);
+      setTimeout(() => setImageUploadProgressPercent(0), 800);
+    }
   };
 
   const insertMarkdown = (syntaxStart, syntaxEnd) => {
@@ -297,11 +342,10 @@ export default function AddBlogScreen() {
 
       const res = await secureFetch("/api/blogs/create-blog", {
         method: "POST",
-        headers: { 
+        headers: {
           "Content-Type": "application/json",
-          "Authorization": ""
-
-         },
+          Authorization: "",
+        },
         body: JSON.stringify(payload),
       });
 
@@ -313,6 +357,7 @@ export default function AddBlogScreen() {
         setLocalImageUri(null);
         setCdnImageUrl(null);
         setCurrentStep(1);
+        setImageUploadCompleted(false);
       } else {
         showToast("Failed to publish blog", "error");
       }
@@ -327,6 +372,61 @@ export default function AddBlogScreen() {
     markdownBody &&
     selectedCategory &&
     (!localImageUri || imageUploadCompleted);
+
+  const renderUploadArea = () => {
+    const pulse = skeletonAnim.interpolate({
+      inputRange: [0, 1],
+      outputRange: [0.25, 0.6],
+    });
+
+    return (
+      <TouchableOpacity
+        onPress={handlePickImage}
+        style={styles.uploadArea}
+        activeOpacity={0.9}
+      >
+        {localImageUri ? (
+          <Image
+            source={{ uri: localImageUri }}
+            style={styles.uploadedImage}
+            resizeMode="cover"
+          />
+        ) : (
+          <View style={styles.uploadPlaceholder}>
+            <Ionicons name="image-outline" size={32} color={COLORS.muted} />
+            <Text style={styles.uploadText}>Tap to select image</Text>
+          </View>
+        )}
+
+        {/* SKELETON + PROGRESS OVERLAY */}
+        {isUploadingImage && (
+          <View style={styles.skeletonOverlay} pointerEvents="none">
+            <Animated.View style={[styles.skeletonPulse, { opacity: pulse }]} />
+            <ActivityIndicator
+              size="small"
+              color="#fff"
+              style={{ marginTop: 10 }}
+            />
+            <Text style={styles.progressText}>
+              {imageUploadProgressPercent}%
+            </Text>
+          </View>
+        )}
+
+        {/* small progress bar under the upload area */}
+        {isUploadingImage && (
+          <View style={styles.progressContainer}>
+            <View
+              style={[
+                styles.progressBar,
+                { width: `${imageUploadProgressPercent}%` },
+              ]}
+            />
+          </View>
+        )}
+      </TouchableOpacity>
+    );
+  };
 
   const renderStep1 = () => (
     <View style={styles.card}>
@@ -398,31 +498,7 @@ export default function AddBlogScreen() {
       </View>
 
       <Text style={[styles.label, { marginTop: 16 }]}>Cover Image</Text>
-      <TouchableOpacity onPress={handlePickImage} style={styles.uploadArea}>
-        {localImageUri ? (
-          <Image
-            source={{ uri: localImageUri }}
-            style={styles.uploadedImage}
-            resizeMode="contain"
-          />
-        ) : (
-          <View style={styles.uploadPlaceholder}>
-            <Ionicons name="image-outline" size={32} color={COLORS.muted} />
-            <Text style={styles.uploadText}>Tap to select image</Text>
-          </View>
-        )}
-      </TouchableOpacity>
-
-      {isUploadingImage && (
-        <View style={styles.progressContainer}>
-          <View
-            style={[
-              styles.progressBar,
-              { width: `${imageUploadProgressPercent}%` },
-            ]}
-          />
-        </View>
-      )}
+      {renderUploadArea()}
 
       <View style={styles.footerButtons}>
         <TouchableOpacity
@@ -455,7 +531,6 @@ export default function AddBlogScreen() {
           uri:
             cdnImageUrl || localImageUri || "https://via.placeholder.com/400",
         }}
-        // FIX: contain ensures the preview fits on screen without cropping
         style={styles.previewCover}
         resizeMode="contain"
       />
@@ -580,7 +655,7 @@ export default function AddBlogScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#000000"},
+  container: { flex: 1, backgroundColor: "#000000" },
   scrollContent: { padding: 16, paddingBottom: 100 },
   header: {
     paddingHorizontal: 20,
@@ -687,8 +762,9 @@ const styles = StyleSheet.create({
   },
   toolBtnText: { color: COLORS.primary, fontWeight: "bold", fontSize: 14 },
   fullscreenBtn: { padding: 6, marginLeft: "auto" },
+
   uploadArea: {
-    height: 200, // Increased height to better fit images
+    height: 200,
     backgroundColor: COLORS.input,
     borderRadius: 12,
     justifyContent: "center",
@@ -697,18 +773,46 @@ const styles = StyleSheet.create({
     borderColor: COLORS.border,
     borderStyle: "dashed",
     overflow: "hidden",
+    marginBottom: 8,
   },
   uploadPlaceholder: { alignItems: "center" },
   uploadText: { color: COLORS.muted, marginTop: 8 },
   uploadedImage: { width: "100%", height: "100%" },
+
+  // Skeleton overlay (added)
+  skeletonOverlay: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: "rgba(0,0,0,0.45)",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  skeletonPulse: {
+    width: "70%",
+    height: 12,
+    backgroundColor: "#2b2b2b",
+    borderRadius: 8,
+    marginBottom: 8,
+  },
+  progressText: {
+    color: "#fff",
+    marginTop: 6,
+    fontWeight: "700",
+  },
+
   progressContainer: {
     height: 4,
     backgroundColor: COLORS.border,
     borderRadius: 2,
     marginTop: 8,
     overflow: "hidden",
+    width: "100%",
   },
   progressBar: { height: "100%", backgroundColor: COLORS.primary },
+
   footerButtons: {
     flexDirection: "row",
     marginTop: 24,
@@ -735,7 +839,7 @@ const styles = StyleSheet.create({
   previewLabel: { color: COLORS.primary, fontWeight: "bold", letterSpacing: 1 },
   previewCover: {
     width: "100%",
-    height: 250, // Taller preview area
+    height: 250,
     borderRadius: 12,
     marginBottom: 16,
     backgroundColor: "#1F2937",
