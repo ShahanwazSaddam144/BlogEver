@@ -165,7 +165,7 @@ export default function ProfileScreen({ navigation }) {
       if (res.ok) {
         showAlert("Profile Updated!", "success");
         setEditMode(false);
-        fetchFreshProfile(); // Refresh cache and state
+        fetchFreshProfile();
       } else {
         showAlert("Failed to save", "error");
       }
