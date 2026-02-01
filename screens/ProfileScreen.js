@@ -1,4 +1,3 @@
-// ProfileScreen.js
 import {
   View,
   Text,
@@ -54,7 +53,7 @@ export default function ProfileScreen({ navigation }) {
   const [originalProfile, setOriginalProfile] = useState(null);
 
   const [profileExists, setProfileExists] = useState(false);
-  const [editMode, setEditMode] = useState(false); // kept for backward compatibility; UI uses isDirty
+  const [editMode, setEditMode] = useState(false);
   const [blogs, setBlogs] = useState([]);
 
   // UI states
@@ -198,6 +197,7 @@ export default function ProfileScreen({ navigation }) {
       desc: data.desc || "",
       role: data.role || "",
       dob: data.dob ? new Date(data.dob).toISOString() : null,
+      // store other useful fields if needed
       name: data.name || null,
       email: data.email || null,
     });
@@ -248,20 +248,17 @@ export default function ProfileScreen({ navigation }) {
   // Cross-platform date change handler
   const onNativeDateChange = (event, selectedDate) => {
     if (Platform.OS === "android") {
-      // Android dialog: hide after event and only accept 'set'
       setShowDatePicker(false);
       if (event?.type === "set" && selectedDate) {
         setDob(selectedDate);
         if (profileExists) setEditMode(true);
       }
     } else if (Platform.OS === "ios") {
-      // iOS inline spinner: accept continuous updates
       if (selectedDate) {
         setDob(selectedDate);
         if (profileExists) setEditMode(true);
       }
     } else {
-      // fallback
       if (selectedDate) {
         setDob(selectedDate);
         if (profileExists) setEditMode(true);
@@ -280,25 +277,7 @@ export default function ProfileScreen({ navigation }) {
     if (profileExists) setEditMode(true);
   };
 
-  // ---------- isDirty computed ----------
-  const isDirty = useMemo(() => {
-    const trimmedDesc = desc ? desc.trim() : "";
-    const trimmedRole = role ? role.trim() : "";
-    const currentDobIso = dob ? dob.toISOString() : null;
-
-    if (!originalProfile) {
-      // no snapshot — consider dirty if any value present
-      return !!(trimmedDesc || trimmedRole || currentDobIso);
-    }
-
-    const origDesc = originalProfile.desc || "";
-    const origRole = originalProfile.role || "";
-    const origDobIso = originalProfile.dob || null;
-
-    return trimmedDesc !== origDesc || trimmedRole !== origRole || currentDobIso !== origDobIso;
-  }, [desc, role, dob, originalProfile]);
-
-  // ---------- handleSaveProfile with optimistic update + rollback ----------
+  // ---------- NEW: Save only changed fields (PATCH) ----------
   const handleSaveProfile = async () => {
     // Build diff against originalProfile snapshot
     const trimmedDesc = desc ? desc.trim() : "";
@@ -307,12 +286,15 @@ export default function ProfileScreen({ navigation }) {
     const changes = {};
 
     if (!originalProfile) {
+      // No snapshot — treat everything as potential change (fall back)
       if (trimmedDesc.length > 0) changes.desc = trimmedDesc;
       if (trimmedRole.length > 0) changes.role = trimmedRole;
       changes.dob = dob ? dob.toISOString() : null;
     } else {
-      if (trimmedDesc !== (originalProfile.desc || "")) changes.desc = trimmedDesc;
-      if (trimmedRole !== (originalProfile.role || "")) changes.role = trimmedRole;
+      if (trimmedDesc !== (originalProfile.desc || ""))
+        changes.desc = trimmedDesc;
+      if (trimmedRole !== (originalProfile.role || ""))
+        changes.role = trimmedRole;
 
       const origDobIso = originalProfile.dob || null;
       const currentDobIso = dob ? dob.toISOString() : null;
@@ -330,16 +312,16 @@ export default function ProfileScreen({ navigation }) {
     if (changes.dob) {
       const picked = new Date(changes.dob);
       if (isNaN(picked.getTime())) return showAlert("Invalid date", "error");
-      if (picked > new Date()) return showAlert("DOB cannot be in the future", "error");
+      if (picked > new Date())
+        return showAlert("DOB cannot be in the future", "error");
     }
 
-    if (changes.desc && changes.desc.length > 800) return showAlert("Description too long", "error");
-    if (changes.role && changes.role.length > 200) return showAlert("Role too long", "error");
+    if (changes.desc && changes.desc.length > 800)
+      return showAlert("Description too long", "error");
+    if (changes.role && changes.role.length > 200)
+      return showAlert("Role too long", "error");
 
-    // Keep previous snapshot so we can restore on failure
-    const prevOriginal = originalProfile ? { ...originalProfile } : null;
-
-    // Optimistic profile snapshot (for instant UI)
+    // Optimistic UI: update cached originalProfile & local UI while saving
     const optimisticProfile = {
       ...(originalProfile || {}),
       ...(changes.desc !== undefined ? { desc: changes.desc } : {}),
@@ -347,20 +329,21 @@ export default function ProfileScreen({ navigation }) {
       ...(changes.dob !== undefined ? { dob: changes.dob } : {}),
     };
 
-    try {
-      // Apply optimistic snapshot locally and cache it
-      setOriginalProfile(optimisticProfile);
-      const cached = (await AsyncStorage.getItem("my-info")) ? JSON.parse(await AsyncStorage.getItem("my-info")) : {};
-      await AsyncStorage.setItem(
-        "my-info",
-        JSON.stringify({
-          ...cached,
-          desc: optimisticProfile.desc,
-          role: optimisticProfile.role,
-          dob: optimisticProfile.dob,
-        }),
-      );
+    // Update local snapshot & cache immediately
+    setOriginalProfile(optimisticProfile);
+    await AsyncStorage.setItem(
+      "my-info",
+      JSON.stringify({
+        ...((await AsyncStorage.getItem("my-info"))
+          ? JSON.parse(await AsyncStorage.getItem("my-info"))
+          : {}),
+        desc: optimisticProfile.desc,
+        role: optimisticProfile.role,
+        dob: optimisticProfile.dob,
+      }),
+    );
 
+    try {
       const res = await secureFetch("/api/users/info", {
         method: "PATCH",
         body: JSON.stringify(changes),
@@ -368,68 +351,27 @@ export default function ProfileScreen({ navigation }) {
 
       if (res.ok) {
         const updated = await res.json();
-        // authoritative server response -> apply
+        // apply returned authoritative profile
         applyProfileData(updated);
         showAlert("Profile saved", "success");
         setEditMode(false);
+        // refresh blogs if server returned changed blog set or you want sync
         await fetchBlogs();
-        return;
-      }
-
-      // Non-OK server response:
-      if (res.status === 409) {
+      } else if (res.status === 409) {
+        // conflict — reload server copy
         showAlert("Profile conflict — reloading", "error");
         await fetchUserInfo();
-        return;
-      }
-
-      // Other failure: rollback snapshot to previous and let user retry
-      const errorData = await res.json().catch(() => ({}));
-      console.log("Server Error Data:", errorData);
-      showAlert("Failed to save profile", "error");
-
-      // Restore previous snapshot and cache (so isDirty keeps working if inputs unchanged)
-      if (prevOriginal) {
-        setOriginalProfile(prevOriginal);
-        const cachedBefore = (await AsyncStorage.getItem("my-info")) ? JSON.parse(await AsyncStorage.getItem("my-info")) : {};
-        await AsyncStorage.setItem(
-          "my-info",
-          JSON.stringify({
-            ...cachedBefore,
-            desc: prevOriginal.desc,
-            role: prevOriginal.role,
-            dob: prevOriginal.dob,
-          }),
-        );
       } else {
-        setOriginalProfile(null);
+        const errorData = await res.json().catch(() => ({}));
+        console.log("Server Error Data:", errorData);
+        // reverse optimistic changes on failure: reload cache
+        showAlert("Failed to save profile", "error");
+        await fetchUserInfo();
       }
-
-      // Ensure save button appears so user can retry
-      setEditMode(true);
-      // Keep inputs as-is so the user can retry
     } catch (err) {
       console.error("Save Profile Error:", err);
       showAlert("Server error", "error");
-
-      // rollback optimistic snapshot
-      if (prevOriginal) {
-        setOriginalProfile(prevOriginal);
-        const cachedBefore = (await AsyncStorage.getItem("my-info")) ? JSON.parse(await AsyncStorage.getItem("my-info")) : {};
-        await AsyncStorage.setItem(
-          "my-info",
-          JSON.stringify({
-            ...cachedBefore,
-            desc: prevOriginal.desc,
-            role: prevOriginal.role,
-            dob: prevOriginal.dob,
-          }),
-        );
-      } else {
-        setOriginalProfile(null);
-      }
-
-      setEditMode(true);
+      await fetchUserInfo();
     }
   };
 
@@ -476,19 +418,31 @@ export default function ProfileScreen({ navigation }) {
   return (
     <>
       <ScrollView contentContainerStyle={styles.container}>
-        {/* header, settings, avatar, inputs etc. */}
+        {/* header, settings, avatar, inputs etc. (unchanged UI) */}
         <View style={styles.header}>
           <Text style={styles.username}>{userName || "Guest"}</Text>
-          <TouchableOpacity onPress={() => setShowSettingsPopup(!showSettingsPopup)}>
+          <TouchableOpacity
+            onPress={() => setShowSettingsPopup(!showSettingsPopup)}
+          >
             <Ionicons name="settings-outline" size={28} color="#fff" />
           </TouchableOpacity>
         </View>
 
         {showSettingsPopup && (
           <View style={styles.settingsPopup}>
-            <TouchableOpacity style={styles.popupItem} onPress={() => setShowLogoutConfirm(true)}>
-              <Ionicons name="log-out-outline" size={18} color="#e74c3c" style={{ marginRight: 8 }} />
-              <Text style={[styles.popupItemText, { color: "#e74c3c" }]}>Logout</Text>
+            <TouchableOpacity
+              style={styles.popupItem}
+              onPress={() => setShowLogoutConfirm(true)}
+            >
+              <Ionicons
+                name="log-out-outline"
+                size={18}
+                color="#e74c3c"
+                style={{ marginRight: 8 }}
+              />
+              <Text style={[styles.popupItemText, { color: "#e74c3c" }]}>
+                Logout
+              </Text>
             </TouchableOpacity>
           </View>
         )}
@@ -497,21 +451,34 @@ export default function ProfileScreen({ navigation }) {
           <Text style={styles.avatarText}>{initials || "G"}</Text>
         </View>
 
-        <EditableInput value={userEmail} editable={false} style={styles.disabledInput} />
+        <EditableInput
+          value={userEmail}
+          editable={false}
+          style={styles.disabledInput}
+        />
 
         <EditableInput
           placeholder="Description"
           value={desc}
           onChangeText={(t) => {
             setDesc(t);
-            if (profileExists) setEditMode(true);
+            setEditMode(true);
           }}
         />
 
-        <TouchableOpacity style={styles.datePickerButton} onPress={openDatePicker}>
-          <Ionicons name="calendar-outline" size={20} color="#2ecc71" style={{ marginRight: 10 }} />
+        <TouchableOpacity
+          style={styles.datePickerButton}
+          onPress={openDatePicker}
+        >
+          <Ionicons
+            name="calendar-outline"
+            size={20}
+            color="#2ecc71"
+            style={{ marginRight: 10 }}
+          />
           <Text style={{ color: "#fff" }}>
-            {dob ? dob.toDateString() : "Pick DOB"} (Age: {computedAgeFromDob === 0 ? "Not set" : computedAgeFromDob})
+            {dob ? dob.toDateString() : "Pick DOB"} (Age:{" "}
+            {computedAgeFromDob === 0 ? "Not set" : computedAgeFromDob})
           </Text>
         </TouchableOpacity>
 
@@ -527,41 +494,80 @@ export default function ProfileScreen({ navigation }) {
         )}
 
         {/* Web modal date picker */}
-        <Modal visible={showDatePicker && Platform.OS === "web"} transparent animationType="fade" onRequestClose={() => setShowDatePicker(false)}>
+        <Modal
+          visible={showDatePicker && Platform.OS === "web"}
+          transparent
+          animationType="fade"
+          onRequestClose={() => setShowDatePicker(false)}
+        >
           <View style={styles.modalOverlay}>
             <View style={styles.webDateModal}>
               <Text style={styles.modalTitle}>Select Date of Birth</Text>
               <View style={{ flexDirection: "row", marginTop: 10 }}>
                 <View style={{ flex: 1, marginRight: 6 }}>
-                  <Picker selectedValue={webYear} onValueChange={(val) => setWebYear(val)} style={styles.picker}>
+                  <Picker
+                    selectedValue={webYear}
+                    onValueChange={(val) => setWebYear(val)}
+                    style={styles.picker}
+                  >
                     {years.map((y) => (
                       <Picker.Item key={y} label={String(y)} value={y} />
                     ))}
                   </Picker>
                 </View>
                 <View style={{ width: 110, marginHorizontal: 3 }}>
-                  <Picker selectedValue={webMonth} onValueChange={(val) => setWebMonth(val)} style={styles.picker}>
+                  <Picker
+                    selectedValue={webMonth}
+                    onValueChange={(val) => setWebMonth(val)}
+                    style={styles.picker}
+                  >
                     {months.map((m, idx) => (
                       <Picker.Item key={m} label={m} value={idx} />
                     ))}
                   </Picker>
                 </View>
                 <View style={{ width: 90, marginLeft: 6 }}>
-                  <Picker selectedValue={webDay} onValueChange={(val) => setWebDay(val)} style={styles.picker}>
-                    {Array.from({ length: daysInMonth(webYear || currentYear, webMonth || 0) }, (_, i) => i + 1).map((d) => (
+                  <Picker
+                    selectedValue={webDay}
+                    onValueChange={(val) => setWebDay(val)}
+                    style={styles.picker}
+                  >
+                    {Array.from(
+                      {
+                        length: daysInMonth(
+                          webYear || currentYear,
+                          webMonth || 0,
+                        ),
+                      },
+                      (_, i) => i + 1,
+                    ).map((d) => (
                       <Picker.Item key={d} label={String(d)} value={d} />
                     ))}
                   </Picker>
                 </View>
               </View>
 
-              <View style={{ flexDirection: "row", justifyContent: "flex-end", marginTop: 16 }}>
-                <Pressable style={[styles.modalButton, styles.cancelButton]} onPress={() => setShowDatePicker(false)}>
+              <View
+                style={{
+                  flexDirection: "row",
+                  justifyContent: "flex-end",
+                  marginTop: 16,
+                }}
+              >
+                <Pressable
+                  style={[styles.modalButton, styles.cancelButton]}
+                  onPress={() => setShowDatePicker(false)}
+                >
                   <Text style={styles.modalButtonText}>Cancel</Text>
                 </Pressable>
 
-                <Pressable style={[styles.modalButton, styles.confirmButton]} onPress={confirmWebDate}>
-                  <Text style={[styles.modalButtonText, { color: "#fff" }]}>Confirm</Text>
+                <Pressable
+                  style={[styles.modalButton, styles.confirmButton]}
+                  onPress={confirmWebDate}
+                >
+                  <Text style={[styles.modalButtonText, { color: "#fff" }]}>
+                    Confirm
+                  </Text>
                 </Pressable>
               </View>
             </View>
@@ -573,16 +579,17 @@ export default function ProfileScreen({ navigation }) {
           value={role}
           onChangeText={(t) => {
             setRole(t);
-            if (profileExists) setEditMode(true);
+            setEditMode(true);
           }}
         />
 
-        {
-          <TouchableOpacity style={styles.saveButton} onPress={handleSaveProfile}>
-            <Text style={styles.saveButtonText}>{profileExists ? "Update Profile" : "Save Profile"}</Text>
-          </TouchableOpacity>
+        <TouchableOpacity style={styles.saveButton} onPress={handleSaveProfile}>
+          <Text style={styles.saveButtonText}>
+            {profileExists ? "Update Profile" : "Save Profile"}
+          </Text>
+        </TouchableOpacity>
 
-        {/* Blogs vertical list */}
+        {/* Blogs vertical list (unchanged) */}
         <View style={styles.BlogContainer}>
           <Text style={styles.BlogText}>Your Blogs</Text>
           {blogs.length === 0 ? (
@@ -590,10 +597,15 @@ export default function ProfileScreen({ navigation }) {
           ) : (
             <View style={{ width: "100%", marginTop: 15 }}>
               {blogs.map((blog) => (
-                <View key={blog._id || blog.id} style={[styles.cardContainer, styles.verticalCard]}>
+                <View
+                  key={blog._id || blog.id}
+                  style={[styles.cardContainer, styles.verticalCard]}
+                >
                   <Image
                     source={{
-                      uri: blog.image?.url || "https://placehold.co/600x400/222/FFF.png?text=No+Image",
+                      uri:
+                        blog.image?.url ||
+                        "https://placehold.co/600x400/222/FFF.png?text=No+Image",
                     }}
                     style={styles.cardImage}
                     resizeMode="cover"
@@ -604,11 +616,26 @@ export default function ProfileScreen({ navigation }) {
                       {blog.desc}
                     </Text>
                     <View style={styles.cardActions}>
-                      <TouchableOpacity style={styles.viewButton} onPress={() => navigation.navigate("FullBlogScreen", { blogId: blog._id || blog.id })}>
+                      <TouchableOpacity
+                        style={styles.viewButton}
+                        onPress={() =>
+                          navigation.navigate("FullBlogScreen", {
+                            blogId: blog._id || blog.id,
+                          })
+                        }
+                      >
                         <Text style={styles.viewButtonText}>View</Text>
                       </TouchableOpacity>
-                      <TouchableOpacity style={styles.deleteButton} onPress={() => { setBlogToDelete(blog._id || blog.id); setShowDeleteBlogConfirm(true); }}>
-                        <Text style={{ color: "#fff", fontWeight: "bold" }}>Delete</Text>
+                      <TouchableOpacity
+                        style={styles.deleteButton}
+                        onPress={() => {
+                          setBlogToDelete(blog._id || blog.id);
+                          setShowDeleteBlogConfirm(true);
+                        }}
+                      >
+                        <Text style={{ color: "#fff", fontWeight: "bold" }}>
+                          Delete
+                        </Text>
                       </TouchableOpacity>
                     </View>
                   </View>
@@ -622,17 +649,34 @@ export default function ProfileScreen({ navigation }) {
       <BottomBar />
 
       {/* Logout confirmation modal */}
-      <Modal visible={showLogoutConfirm} transparent animationType="fade" onRequestClose={() => setShowLogoutConfirm(false)}>
+      <Modal
+        visible={showLogoutConfirm}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowLogoutConfirm(false)}
+      >
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <Text style={styles.modalTitle}>Confirm Logout</Text>
-            <Text style={styles.modalBody}>Are you sure you want to log out? You'll need to sign in again.</Text>
+            <Text style={styles.modalBody}>
+              Are you sure you want to log out? You'll need to sign in again.
+            </Text>
             <View style={styles.modalButtons}>
-              <Pressable style={[styles.modalButton, styles.cancelButton]} onPress={() => setShowLogoutConfirm(false)}>
+              <Pressable
+                style={[styles.modalButton, styles.cancelButton]}
+                onPress={() => setShowLogoutConfirm(false)}
+              >
                 <Text style={styles.modalButtonText}>Cancel</Text>
               </Pressable>
-              <Pressable style={[styles.modalButton, styles.confirmButton]} onPress={() => { /* call handleLogout */ }}>
-                <Text style={[styles.modalButtonText, { color: "#fff" }]}>Logout</Text>
+              <Pressable
+                style={[styles.modalButton, styles.confirmButton]}
+                onPress={() => {
+                  /* call handleLogout or navigation reset */
+                }}
+              >
+                <Text style={[styles.modalButtonText, { color: "#fff" }]}>
+                  Logout
+                </Text>
               </Pressable>
             </View>
           </View>
@@ -640,17 +684,38 @@ export default function ProfileScreen({ navigation }) {
       </Modal>
 
       {/* Delete blog modal */}
-      <Modal visible={showDeleteBlogConfirm} transparent animationType="fade" onRequestClose={() => { setShowDeleteBlogConfirm(false); setBlogToDelete(null); }}>
+      <Modal
+        visible={showDeleteBlogConfirm}
+        transparent
+        animationType="fade"
+        onRequestClose={() => {
+          setShowDeleteBlogConfirm(false);
+          setBlogToDelete(null);
+        }}
+      >
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <Text style={styles.modalTitle}>Delete Blog</Text>
-            <Text style={styles.modalBody}>This will permanently delete the selected blog. Are you sure?</Text>
+            <Text style={styles.modalBody}>
+              This will permanently delete the selected blog. Are you sure?
+            </Text>
             <View style={styles.modalButtons}>
-              <Pressable style={[styles.modalButton, styles.cancelButton]} onPress={() => { setShowDeleteBlogConfirm(false); setBlogToDelete(null); }}>
+              <Pressable
+                style={[styles.modalButton, styles.cancelButton]}
+                onPress={() => {
+                  setShowDeleteBlogConfirm(false);
+                  setBlogToDelete(null);
+                }}
+              >
                 <Text style={styles.modalButtonText}>Cancel</Text>
               </Pressable>
-              <Pressable style={[styles.modalButton, styles.deleteConfirmButton]} onPress={handleDeleteBlog}>
-                <Text style={[styles.modalButtonText, { color: "#fff" }]}>Delete</Text>
+              <Pressable
+                style={[styles.modalButton, styles.deleteConfirmButton]}
+                onPress={handleDeleteBlog}
+              >
+                <Text style={[styles.modalButtonText, { color: "#fff" }]}>
+                  Delete
+                </Text>
               </Pressable>
             </View>
           </View>
@@ -659,7 +724,15 @@ export default function ProfileScreen({ navigation }) {
 
       {/* Alert */}
       {alertMessage.length > 0 && (
-        <Animated.View style={[styles.customAlert, { opacity: alertAnim, backgroundColor: alertType === "success" ? "#2ecc71" : "#e74c3c" }]}>
+        <Animated.View
+          style={[
+            styles.customAlert,
+            {
+              opacity: alertAnim,
+              backgroundColor: alertType === "success" ? "#2ecc71" : "#e74c3c",
+            },
+          ]}
+        >
           <Text style={styles.customAlertText}>{alertMessage}</Text>
         </Animated.View>
       )}
@@ -668,6 +741,7 @@ export default function ProfileScreen({ navigation }) {
 }
 
 const styles = StyleSheet.create({
+  // ... (keep your existing styles — omitted here to save space but you can reuse the ones from your file)
   container: {
     flexGrow: 1,
     alignItems: "center",
@@ -759,9 +833,18 @@ const styles = StyleSheet.create({
   verticalCard: { flexDirection: "column" },
   cardImage: { width: "100%", height: 180 },
   cardBody: { padding: 12 },
-  cardTitle: { color: "#fff", fontSize: 18, fontWeight: "bold", marginBottom: 6 },
+  cardTitle: {
+    color: "#fff",
+    fontSize: 18,
+    fontWeight: "bold",
+    marginBottom: 6,
+  },
   cardDesc: { color: "#aaa", fontSize: 14, marginBottom: 10 },
-  cardActions: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
+  cardActions: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
   viewButton: {
     backgroundColor: "#2ecc71",
     paddingVertical: 8,
@@ -820,7 +903,12 @@ const styles = StyleSheet.create({
   },
   modalBody: { color: "#ddd", fontSize: 14, marginBottom: 16 },
   modalButtons: { flexDirection: "row", justifyContent: "flex-end" },
-  modalButton: { paddingVertical: 10, paddingHorizontal: 16, borderRadius: 8, marginLeft: 10 },
+  modalButton: {
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    marginLeft: 10,
+  },
   modalButtonText: { color: "#111", fontWeight: "700" },
   cancelButton: { backgroundColor: "#ddd" },
   confirmButton: { backgroundColor: "#2ecc71" },
