@@ -173,10 +173,9 @@ export default function ProfileScreen({ navigation }) {
     setProfileExists(exists);
   };
 
-  // fetch user info from /api/user/info (first)
   const fetchUserInfo = async () => {
     try {
-      const res = await secureFetch("/api/user/info");
+      const res = await secureFetch("/api/users/info");
       if (res.ok) {
         const data = await res.json();
         // cache
