@@ -96,6 +96,12 @@ export default function AddBlogScreen() {
     useState(0);
   const [imageUploadCompleted, setImageUploadCompleted] = useState(false);
 
+  // Preview loading state (skeleton until preview image loads)
+  const [isPreviewImageLoading, setIsPreviewImageLoading] = useState(false);
+
+  // submission state (prevents double-submit)
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
   // UI state
   const [currentStep, setCurrentStep] = useState(1);
   const [alertMessage, setAlertMessage] = useState("");
@@ -168,7 +174,7 @@ export default function AddBlogScreen() {
   const skeletonLoopRef = useRef(null);
 
   useEffect(() => {
-    if (isUploadingImage) {
+    if (isUploadingImage || isPreviewImageLoading) {
       skeletonAnim.setValue(0);
       skeletonLoopRef.current = Animated.loop(
         Animated.sequence([
@@ -194,10 +200,16 @@ export default function AddBlogScreen() {
     return () => {
       if (skeletonLoopRef.current) skeletonLoopRef.current.stop();
     };
-  }, [isUploadingImage, skeletonAnim]);
+  }, [isUploadingImage, isPreviewImageLoading, skeletonAnim]);
 
   // Image handling
   const handlePickImage = async () => {
+    // guard against double-pick while uploading
+    if (isUploadingImage) {
+      showToast("Upload in progress — wait a sec.", "error");
+      return;
+    }
+
     try {
       const { status } =
         await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -218,6 +230,8 @@ export default function AddBlogScreen() {
       if (!result.canceled && result.assets && result.assets.length > 0) {
         const uri = result.assets[0].uri;
         setLocalImageUri(uri);
+        // show preview skeleton while upload/preview load starts
+        setIsPreviewImageLoading(true);
         // Start upload process immediately
         await requestPresignedUrlAndUpload(uri);
       }
@@ -261,6 +275,7 @@ export default function AddBlogScreen() {
 
   // Request presigned and upload (handles web vs native)
   const requestPresignedUrlAndUpload = async (imageUri) => {
+    // start upload, prevent duplicate uploads
     setIsUploadingImage(true);
     setImageUploadProgressPercent(0);
     setImageUploadCompleted(false);
@@ -315,8 +330,11 @@ export default function AddBlogScreen() {
     } catch (error) {
       console.error("Upload error:", error);
       showToast(error.message || "Upload failed", "error");
+      // If upload failed, keep local preview but mark preview load false to remove skeleton
+      setIsPreviewImageLoading(false);
     } finally {
       setIsUploadingImage(false);
+      // small delay to show 100% complete
       setTimeout(() => setImageUploadProgressPercent(0), 800);
     }
   };
@@ -328,8 +346,14 @@ export default function AddBlogScreen() {
   const toggleFullscreen = () => setIsEditorFullscreen(!isEditorFullscreen);
 
   const submitBlog = async () => {
-    if (!canProceed) return;
+    // prevent double submit
+    if (isSubmitting) return;
+    if (!canProceed) {
+      showToast("Complete required fields before publishing", "error");
+      return;
+    }
 
+    setIsSubmitting(true);
     try {
       const payload = {
         title: titleText,
@@ -359,11 +383,15 @@ export default function AddBlogScreen() {
         setCurrentStep(1);
         setImageUploadCompleted(false);
       } else {
+        const errText = await res.text().catch(() => null);
+        console.warn("publish error body:", errText);
         showToast("Failed to publish blog", "error");
       }
     } catch (e) {
       console.error("submitBlog error:", e);
       showToast("Network error", "error");
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -382,14 +410,30 @@ export default function AddBlogScreen() {
     return (
       <TouchableOpacity
         onPress={handlePickImage}
-        style={styles.uploadArea}
+        style={[
+          styles.uploadArea,
+          isUploadingImage ? { opacity: 0.85 } : undefined,
+        ]}
         activeOpacity={0.9}
+        disabled={isUploadingImage}
       >
         {localImageUri ? (
           <Image
             source={{ uri: localImageUri }}
             style={styles.uploadedImage}
             resizeMode="cover"
+            onLoadStart={() => {
+              // Keep preview skeleton while upload/preview is in progress
+              setIsPreviewImageLoading(true);
+            }}
+            onLoadEnd={() => {
+              // if upload completed, preview may come from cdnImageUrl; only clear skeleton here if not uploading
+              setIsPreviewImageLoading(false);
+            }}
+            onError={() => {
+              setIsPreviewImageLoading(false);
+              showToast("Failed to load selected image", "error");
+            }}
           />
         ) : (
           <View style={styles.uploadPlaceholder}>
@@ -399,7 +443,7 @@ export default function AddBlogScreen() {
         )}
 
         {/* SKELETON + PROGRESS OVERLAY */}
-        {isUploadingImage && (
+        {(isUploadingImage || isPreviewImageLoading) && (
           <View style={styles.skeletonOverlay} pointerEvents="none">
             <Animated.View style={[styles.skeletonPulse, { opacity: pulse }]} />
             <ActivityIndicator
@@ -407,9 +451,13 @@ export default function AddBlogScreen() {
               color="#fff"
               style={{ marginTop: 10 }}
             />
-            <Text style={styles.progressText}>
-              {imageUploadProgressPercent}%
-            </Text>
+            {isUploadingImage ? (
+              <Text style={styles.progressText}>
+                Uploading... {imageUploadProgressPercent}%
+              </Text>
+            ) : (
+              <Text style={styles.progressText}>Loading preview...</Text>
+            )}
           </View>
         )}
 
@@ -526,14 +574,35 @@ export default function AddBlogScreen() {
         <Ionicons name="eye-outline" size={18} color={COLORS.primary} />
       </View>
 
-      <Image
-        source={{
-          uri:
-            cdnImageUrl || localImageUri || "https://via.placeholder.com/400",
-        }}
-        style={styles.previewCover}
-        resizeMode="contain"
-      />
+      <View>
+        <Image
+          source={{
+            uri:
+              cdnImageUrl || localImageUri || "https://via.placeholder.com/400",
+          }}
+          style={styles.previewCover}
+          resizeMode="contain"
+          onLoadStart={() => setIsPreviewImageLoading(true)}
+          onLoadEnd={() => setIsPreviewImageLoading(false)}
+          onError={() => {
+            setIsPreviewImageLoading(false);
+            showToast("Failed to load preview image", "error");
+          }}
+        />
+
+        {/* Preview skeleton overlay (shows until image finishes loading) */}
+        {isPreviewImageLoading && (
+          <View style={styles.previewSkeletonOverlay} pointerEvents="none">
+            <Animated.View
+              style={[
+                styles.previewSkeletonBar,
+                { opacity: skeletonAnim.interpolate({ inputRange: [0, 1], outputRange: [0.25, 0.6] }) },
+              ]}
+            />
+            <Text style={[styles.progressText, { marginTop: 8 }]}>Loading image...</Text>
+          </View>
+        )}
+      </View>
 
       <View style={styles.previewContent}>
         <Text style={styles.previewTitle}>{titleText}</Text>
@@ -557,8 +626,15 @@ export default function AddBlogScreen() {
           <Ionicons name="arrow-back" size={16} color={COLORS.text} />
           <Text style={styles.backBtnText}>Edit</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={styles.publishBtn} onPress={submitBlog}>
-          {isUploadingImage ? (
+        <TouchableOpacity
+          style={[
+            styles.publishBtn,
+            (isUploadingImage || isSubmitting) && styles.disabledBtn,
+          ]}
+          onPress={submitBlog}
+          disabled={isUploadingImage || isSubmitting}
+        >
+          {isSubmitting ? (
             <ActivityIndicator color="#000" />
           ) : (
             <Text style={styles.publishBtnText}>Publish Now</Text>
@@ -844,6 +920,25 @@ const styles = StyleSheet.create({
     marginBottom: 16,
     backgroundColor: "#1F2937",
   },
+  // overlay for preview skeleton
+  previewSkeletonOverlay: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    height: 250,
+    borderRadius: 12,
+    backgroundColor: "rgba(0,0,0,0.45)",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  previewSkeletonBar: {
+    width: "80%",
+    height: 14,
+    backgroundColor: "#2b2b2b",
+    borderRadius: 8,
+  },
+
   previewContent: { paddingHorizontal: 4 },
   previewTitle: {
     color: COLORS.text,
