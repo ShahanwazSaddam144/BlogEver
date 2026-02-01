@@ -6,11 +6,13 @@ import {
   ActivityIndicator,
   FlatList,
   SafeAreaView,
+  TouchableOpacity, // Added
 } from "react-native";
+import { Ionicons } from "@expo/vector-icons"; // Added for the back icon
 import BottomBar from "../components/BottomBar";
 import { secureFetch } from "api/apiClient";
 
-export default function PublicProfileScreen({ route }) {
+export default function PublicProfileScreen({ route, navigation }) { // Added navigation
   const { email, name } = route.params;
 
   const [profile, setProfile] = useState(null);
@@ -25,18 +27,12 @@ export default function PublicProfileScreen({ route }) {
     try {
       setLoading(true);
       const res = await secureFetch(
-        `/api/users/profile/${encodeURIComponent(email)}`,
-        {
-          method: "GET",
-          headers: { "Content-Type": "application/json" },
-        },
+        `/api/users/profile/${encodeURIComponent(email)}`
       );
 
       if (!res.ok) throw new Error("Profile not found");
 
       const data = await res.json();
-      console.log(data)
-      // Update both states from the single response
       setProfile(data);
       setBlogs(data.blogs || []);
     } catch (err) {
@@ -64,47 +60,47 @@ export default function PublicProfileScreen({ route }) {
     );
   }
 
-  if (!profile) {
-    return (
-      <View style={styles.center}>
-        <Text style={{ color: "#fff" }}>Profile not found</Text>
-        <BottomBar />
-      </View>
-    );
-  }
-
   // Define Header to be used inside FlatList
   const ProfileHeader = () => (
     <View style={styles.headerContainer}>
+      {/* --- Breadcrumb Row --- */}
+      <View style={styles.breadcrumbContainer}>
+        <TouchableOpacity 
+          style={styles.breadcrumbTouch} 
+          onPress={() => navigation.goBack()}
+        >
+          <Text style={styles.breadcrumbLink}>Home</Text>
+        </TouchableOpacity>
+        <Ionicons name="chevron-forward" size={14} color="#555" style={{ marginHorizontal: 4 }} />
+        <Text style={styles.breadcrumbCurrent}>{name}</Text>
+      </View>
+
       {/* Avatar */}
       <View style={styles.avatar}>
         <Text style={styles.avatarText}>{getInitials(name)}</Text>
       </View>
 
-      {/* Name & Role */}
       <Text style={styles.name}>{name}</Text>
-      <Text style={styles.role}>{profile.role || "User"}</Text>
+      <Text style={styles.role}>{profile?.role || "User"}</Text>
 
-      {/* Profile Info */}
+      {/* Profile Info Card */}
       <View style={styles.card}>
         <Text style={styles.label}>Description</Text>
-        <Text style={styles.value}>{profile.dec !== undefined && profile.age !== null && profile.dec !== false
-            ? String(profile.dec)
-            : "No description provided."}</Text>
+        <Text style={styles.value}>
+            {profile?.desc ? String(profile.desc) : "No description provided."}
+        </Text>
 
         <View style={styles.divider} />
 
         <Text style={styles.label}>Age</Text>
         <Text style={styles.value}>
-          {profile.age !== undefined && profile.age !== 0 && profile.age !== null
-            ? String(profile.age)
-            : "—"}
+          {profile?.age ? String(profile.age) : "—"}
         </Text>
 
         <View style={styles.divider} />
 
         <Text style={styles.label}>Email</Text>
-        <Text style={styles.value}>{profile.email}</Text>
+        <Text style={styles.value}>{profile?.email}</Text>
       </View>
 
       <Text style={styles.blogTitle}>
@@ -115,39 +111,43 @@ export default function PublicProfileScreen({ route }) {
 
   return (
     <SafeAreaView style={styles.container}>
-      <FlatList
-        data={blogs}
-        keyExtractor={(item) => item._id || Math.random().toString()}
-        ListHeaderComponent={ProfileHeader}
-        contentContainerStyle={{ paddingBottom: 100 }}
-        ListEmptyComponent={
-          <Text style={styles.noBlogs}>No blogs posted yet.</Text>
-        }
-        renderItem={({ item }) => (
-          <View style={styles.blogCardWrapper}>
-            <View style={styles.blogCard}>
-              <Text style={styles.blogName}>{item.name ?? item.title}</Text>
-              <Text style={styles.blogDesc} numberOfLines={3}>
-                {item.desc ?? "—"}
-              </Text>
-
-              <View style={styles.blogFooter}>
-                <View style={styles.blogcategoryContainer}>
-                  <Text style={styles.categoryHeading}>Category:</Text>
-                  <Text style={styles.blogCategory}>
-                    {item.category ?? "General"}
+      {!profile ? (
+        <View style={styles.center}>
+          <Text style={{ color: "#fff" }}>Profile not found</Text>
+          <TouchableOpacity onPress={() => navigation.goBack()} style={{ marginTop: 20 }}>
+             <Text style={{ color: "#2ecc71" }}>Go Back</Text>
+          </TouchableOpacity>
+        </View>
+      ) : (
+        <FlatList
+          data={blogs}
+          keyExtractor={(item) => item._id || Math.random().toString()}
+          ListHeaderComponent={ProfileHeader}
+          contentContainerStyle={{ paddingBottom: 100 }}
+          ListEmptyComponent={
+            <Text style={styles.noBlogs}>No blogs posted yet.</Text>
+          }
+          renderItem={({ item }) => (
+            <View style={styles.blogCardWrapper}>
+              <View style={styles.blogCard}>
+                <Text style={styles.blogName}>{item.name ?? item.title}</Text>
+                <Text style={styles.blogDesc} numberOfLines={3}>
+                  {item.desc ?? "—"}
+                </Text>
+                <View style={styles.blogFooter}>
+                  <View style={styles.blogcategoryContainer}>
+                    <Text style={styles.categoryHeading}>Category:</Text>
+                    <Text style={styles.blogCategory}>{item.category ?? "General"}</Text>
+                  </View>
+                  <Text style={styles.blogDate}>
+                    {item.createdAt ? new Date(item.createdAt).toDateString() : ""}
                   </Text>
                 </View>
-                <Text style={styles.blogDate}>
-                  {item.createdAt
-                    ? new Date(item.createdAt).toDateString()
-                    : ""}
-                </Text>
               </View>
             </View>
-          </View>
-        )}
-      />
+          )}
+        />
+      )}
       <BottomBar />
     </SafeAreaView>
   );
@@ -164,9 +164,33 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
   },
+  // Breadcrumb Styles
+  breadcrumbContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    alignSelf: "flex-start",
+    marginBottom: 20,
+    backgroundColor: "#111",
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+  },
+  breadcrumbTouch: {
+    paddingVertical: 2,
+  },
+  breadcrumbLink: {
+    color: "#2ecc71",
+    fontSize: 13,
+    fontWeight: "500",
+  },
+  breadcrumbCurrent: {
+    color: "#888",
+    fontSize: 13,
+  },
+  // Rest of styles
   headerContainer: {
     alignItems: "center",
-    paddingTop: 24,
+    paddingTop: 15,
     paddingHorizontal: 16,
   },
   avatar: {
