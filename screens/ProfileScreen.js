@@ -15,7 +15,6 @@ import { useState, useEffect, useRef, useMemo } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import BottomBar from "../components/BottomBar";
 import { Ionicons } from "@expo/vector-icons";
-import Swiper from "react-native-swiper";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { secureFetch } from "api/apiClient";
 
@@ -391,47 +390,61 @@ export default function ProfileScreen({ navigation }) {
           </TouchableOpacity>
         )}
 
-        {/* Blogs Swiper Section */}
+        {/* Blogs Vertical List */}
         <View style={styles.BlogContainer}>
           <Text style={styles.BlogText}>Your Blogs</Text>
+
           {blogs.length === 0 ? (
             <Text style={{ color: "#888", marginTop: 10 }}>No blogs yet.</Text>
           ) : (
-            <View style={{ height: 480, marginTop: 15 }}>
-              <Swiper
-                showsPagination
-                activeDotColor="#2ecc71"
-                loadMinimal
-                loadMinimalSize={1}
-              >
-                {blogs.map((blog) => (
-                  <View key={blog._id || blog.id} style={styles.cardContainer}>
-                    <Image
-                      source={{
-                        uri:
-                          blog.image?.url ||
-                          "https://placehold.co/600x400/222/FFF.png?text=No+Image",
-                      }}
-                      style={styles.cardImage}
-                    />
+            <View style={{ width: "100%", marginTop: 15 }}>
+              {blogs.map((blog) => (
+                <View
+                  key={blog._id || blog.id}
+                  style={[styles.cardContainer, styles.verticalCard]}
+                >
+                  <Image
+                    source={{
+                      uri:
+                        blog.image?.url ||
+                        "https://placehold.co/600x400/222/FFF.png?text=No+Image",
+                    }}
+                    style={styles.cardImage}
+                    resizeMode="cover"
+                  />
+                  <View style={styles.cardBody}>
                     <Text style={styles.cardTitle}>{blog.name}</Text>
-                    <Text style={styles.cardDesc} numberOfLines={2}>
+                    <Text style={styles.cardDesc} numberOfLines={3}>
                       {blog.desc}
                     </Text>
-                    <TouchableOpacity
-                      style={styles.deleteButton}
-                      onPress={() => {
-                        setBlogToDelete(blog._id || blog.id);
-                        setShowDeleteBlogConfirm(true);
-                      }}
-                    >
-                      <Text style={{ color: "#fff", fontWeight: "bold" }}>
-                        Delete
-                      </Text>
-                    </TouchableOpacity>
+
+                    <View style={styles.cardActions}>
+                      <TouchableOpacity
+                        style={styles.viewButton}
+                        onPress={() =>
+                          navigation.navigate("BlogDetail", {
+                            blogId: blog._id || blog.id,
+                          })
+                        }
+                      >
+                        <Text style={styles.viewButtonText}>View</Text>
+                      </TouchableOpacity>
+
+                      <TouchableOpacity
+                        style={styles.deleteButton}
+                        onPress={() => {
+                          setBlogToDelete(blog._id || blog.id);
+                          setShowDeleteBlogConfirm(true);
+                        }}
+                      >
+                        <Text style={{ color: "#fff", fontWeight: "bold" }}>
+                          Delete
+                        </Text>
+                      </TouchableOpacity>
+                    </View>
                   </View>
-                ))}
-              </Swiper>
+                </View>
+              ))}
             </View>
           )}
         </View>
@@ -611,18 +624,45 @@ const styles = StyleSheet.create({
   cardContainer: {
     backgroundColor: "#111",
     borderRadius: 15,
-    padding: 15,
-    marginHorizontal: 5,
+    padding: 0,
+    marginHorizontal: 0,
+    marginBottom: 14,
+    borderWidth: 1,
+    borderColor: "#222",
+    overflow: "hidden",
   },
-  cardImage: { width: "100%", height: 200, borderRadius: 10, marginBottom: 10 },
-  cardTitle: { color: "#fff", fontSize: 18, fontWeight: "bold" },
-  cardDesc: { color: "#aaa", fontSize: 14, marginVertical: 5 },
+  verticalCard: {
+    // spacing for vertical layout
+    flexDirection: "column",
+  },
+  cardImage: { width: "100%", height: 180 },
+  cardBody: { padding: 12 },
+  cardTitle: {
+    color: "#fff",
+    fontSize: 18,
+    fontWeight: "bold",
+    marginBottom: 6,
+  },
+  cardDesc: { color: "#aaa", fontSize: 14, marginBottom: 10 },
+  cardActions: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  viewButton: {
+    backgroundColor: "#2ecc71",
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    borderRadius: 8,
+  },
+  viewButtonText: { color: "#fff", fontWeight: "700" },
   deleteButton: {
     backgroundColor: "#e74c3c",
-    padding: 10,
+    paddingVertical: 8,
+    paddingHorizontal: 14,
     borderRadius: 8,
-    marginTop: 10,
     alignItems: "center",
+    justifyContent: "center",
   },
   customAlert: {
     position: "absolute",
