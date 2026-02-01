@@ -35,7 +35,7 @@ export default function PublicProfileScreen({ route }) {
       if (!res.ok) throw new Error("Profile not found");
 
       const data = await res.json();
-
+      console.log(data)
       // Update both states from the single response
       setProfile(data);
       setBlogs(data.blogs || []);
@@ -94,7 +94,7 @@ export default function PublicProfileScreen({ route }) {
 
         <Text style={styles.label}>Age</Text>
         <Text style={styles.value}>
-          {profile.age !== undefined && profile.age !== null
+          {profile.age !== undefined && profile.age !== 0 && profile.age !== null
             ? String(profile.age)
             : "—"}
         </Text>
