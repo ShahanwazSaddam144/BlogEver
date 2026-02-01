@@ -20,6 +20,9 @@ importers:
       '@react-native-community/hooks':
         specifier: ^100.1.0
         version: 100.1.0(react-native@0.81.5(@babel/core@7.28.6)(react@19.1.0))(react@19.1.0)
+      '@react-native-picker/picker':
+        specifier: ^2.11.4
+        version: 2.11.4(react-native@0.81.5(@babel/core@7.28.6)(react@19.1.0))(react@19.1.0)
       '@react-navigation/native':
         specifier: ^7.1.28
         version: 7.1.28(react-native@0.81.5(@babel/core@7.28.6)(react@19.1.0))(react@19.1.0)
