@@ -205,7 +205,7 @@ export default function ProfileScreen({ navigation }) {
 
   const fetchUserInfo = async () => {
     try {
-      const res = await secureFetch("/api/user/info");
+      const res = await secureFetch("/api/users/info");
       if (res.ok) {
         const data = await res.json();
         await AsyncStorage.setItem("my-info", JSON.stringify(data));
@@ -344,7 +344,7 @@ export default function ProfileScreen({ navigation }) {
     );
 
     try {
-      const res = await secureFetch("/api/user/info", {
+      const res = await secureFetch("/api/users/info", {
         method: "PATCH",
         body: JSON.stringify(changes),
       });
@@ -362,6 +362,8 @@ export default function ProfileScreen({ navigation }) {
         showAlert("Profile conflict — reloading", "error");
         await fetchUserInfo();
       } else {
+        const errorData = await res.json().catch(() => ({}));
+        console.log("Server Error Data:", errorData);
         // reverse optimistic changes on failure: reload cache
         showAlert("Failed to save profile", "error");
         await fetchUserInfo();
