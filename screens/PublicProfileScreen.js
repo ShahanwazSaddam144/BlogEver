@@ -88,7 +88,9 @@ export default function PublicProfileScreen({ route }) {
       {/* Profile Info */}
       <View style={styles.card}>
         <Text style={styles.label}>Description</Text>
-        <Text style={styles.value}>{profile.desc ?? "No bio provided"}</Text>
+        <Text style={styles.value}>{profile.dec !== undefined && profile.age !== null && profile.dec !== false
+            ? String(profile.dec)
+            : "No description provided."}</Text>
 
         <View style={styles.divider} />
 
