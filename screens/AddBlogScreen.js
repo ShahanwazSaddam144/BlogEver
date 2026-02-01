@@ -96,8 +96,12 @@ export default function AddBlogScreen() {
     useState(0);
   const [imageUploadCompleted, setImageUploadCompleted] = useState(false);
 
-  // Preview loading state (skeleton until preview image loads)
+  // active image shown in preview (avoids swapping until CDN is ready)
+  const [activeImageUri, setActiveImageUri] = useState(null);
+
+  // Preview loading state (skeleton until preview image loads / cdn prefetch)
   const [isPreviewImageLoading, setIsPreviewImageLoading] = useState(false);
+  const [isPrefetchingCdn, setIsPrefetchingCdn] = useState(false);
 
   // submission state (prevents double-submit)
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -202,13 +206,52 @@ export default function AddBlogScreen() {
     };
   }, [isUploadingImage, isPreviewImageLoading, skeletonAnim]);
 
+  // Keep activeImageUri in sync with localImageUri initially
+  useEffect(() => {
+    if (localImageUri) {
+      setActiveImageUri(localImageUri);
+    } else if (!cdnImageUrl) {
+      setActiveImageUri(null);
+    }
+  }, [localImageUri, cdnImageUrl]);
+
+  // When CDN URL becomes available: prefetch it and only swap after it's cached (prevents flicker)
+  useEffect(() => {
+    let cancelled = false;
+    const switchToCdnSafely = async (url) => {
+      if (!url) return;
+      try {
+        setIsPrefetchingCdn(true);
+        setIsPreviewImageLoading(true);
+        // prefetch returns a Promise<boolean>
+        await Image.prefetch(url);
+        if (cancelled) return;
+        // now it's cached -> swap active image
+        setActiveImageUri(url);
+      } catch (e) {
+        console.warn("CDN prefetch failed:", e);
+        // keep activeImageUri as-is (likely local)
+        showToast("Could not load CDN preview, using local image.", "error");
+      } finally {
+        if (!cancelled) {
+          setIsPreviewImageLoading(false);
+          setIsPrefetchingCdn(false);
+        }
+      }
+    };
+
+    if (cdnImageUrl) {
+      switchToCdnSafely(cdnImageUrl);
+    }
+
+    return () => {
+      cancelled = true;
+    };
+  }, [cdnImageUrl]);
+
   // Image handling
   const handlePickImage = async () => {
-    // guard against double-pick while uploading
-    if (isUploadingImage) {
-      showToast("Upload in progress — wait a sec.", "error");
-      return;
-    }
+    if (isUploadingImage) return;
 
     try {
       const { status } =
@@ -230,9 +273,11 @@ export default function AddBlogScreen() {
       if (!result.canceled && result.assets && result.assets.length > 0) {
         const uri = result.assets[0].uri;
         setLocalImageUri(uri);
-        // show preview skeleton while upload/preview load starts
-        setIsPreviewImageLoading(true);
-        // Start upload process immediately
+        setActiveImageUri(uri);
+
+        // FIX: Ensure these are false so the skeleton doesn't flash
+        setIsPreviewImageLoading(false);
+
         await requestPresignedUrlAndUpload(uri);
       }
     } catch (error) {
@@ -322,7 +367,7 @@ export default function AddBlogScreen() {
 
       if (cloudResp && cloudResp.secure_url) {
         setImageUploadCompleted(true);
-        setCdnImageUrl(cloudResp.secure_url);
+        setCdnImageUrl(cloudResp.secure_url); // triggers prefetch and safe swap (see useEffect)
         showToast("Upload successful!", "success");
       } else {
         throw new Error(cloudResp?.error?.message || "Upload failed");
@@ -380,6 +425,7 @@ export default function AddBlogScreen() {
         setMarkdownBody("");
         setLocalImageUri(null);
         setCdnImageUrl(null);
+        setActiveImageUri(null);
         setCurrentStep(1);
         setImageUploadCompleted(false);
       } else {
@@ -422,16 +468,9 @@ export default function AddBlogScreen() {
             source={{ uri: localImageUri }}
             style={styles.uploadedImage}
             resizeMode="cover"
-            onLoadStart={() => {
-              // Keep preview skeleton while upload/preview is in progress
-              setIsPreviewImageLoading(true);
-            }}
-            onLoadEnd={() => {
-              // if upload completed, preview may come from cdnImageUrl; only clear skeleton here if not uploading
-              setIsPreviewImageLoading(false);
-            }}
+            // --- FIX: REMOVED onLoadStart and onLoadEnd ---
+            // Local images load too fast; these callbacks cause the flicker.
             onError={() => {
-              setIsPreviewImageLoading(false);
               showToast("Failed to load selected image", "error");
             }}
           />
@@ -443,7 +482,8 @@ export default function AddBlogScreen() {
         )}
 
         {/* SKELETON + PROGRESS OVERLAY */}
-        {(isUploadingImage || isPreviewImageLoading) && (
+        {/* Only show skeleton if explicitly uploading or if CDN prefetch is happening */}
+        {isUploadingImage && (
           <View style={styles.skeletonOverlay} pointerEvents="none">
             <Animated.View style={[styles.skeletonPulse, { opacity: pulse }]} />
             <ActivityIndicator
@@ -451,13 +491,9 @@ export default function AddBlogScreen() {
               color="#fff"
               style={{ marginTop: 10 }}
             />
-            {isUploadingImage ? (
-              <Text style={styles.progressText}>
-                Uploading... {imageUploadProgressPercent}%
-              </Text>
-            ) : (
-              <Text style={styles.progressText}>Loading preview...</Text>
-            )}
+            <Text style={styles.progressText}>
+              Uploading... {imageUploadProgressPercent}%
+            </Text>
           </View>
         )}
 
@@ -578,28 +614,29 @@ export default function AddBlogScreen() {
         <Image
           source={{
             uri:
-              cdnImageUrl || localImageUri || "https://via.placeholder.com/400",
+              activeImageUri ||
+              localImageUri ||
+              "https://via.placeholder.com/400",
           }}
           style={styles.previewCover}
-          resizeMode="contain"
-          onLoadStart={() => setIsPreviewImageLoading(true)}
-          onLoadEnd={() => setIsPreviewImageLoading(false)}
-          onError={() => {
-            setIsPreviewImageLoading(false);
-            showToast("Failed to load preview image", "error");
-          }}
+          resizeMode="cover"
         />
-
-        {/* Preview skeleton overlay (shows until image finishes loading) */}
-        {isPreviewImageLoading && (
+        {(isPreviewImageLoading || isPrefetchingCdn) && (
           <View style={styles.previewSkeletonOverlay} pointerEvents="none">
             <Animated.View
               style={[
                 styles.previewSkeletonBar,
-                { opacity: skeletonAnim.interpolate({ inputRange: [0, 1], outputRange: [0.25, 0.6] }) },
+                {
+                  opacity: skeletonAnim.interpolate({
+                    inputRange: [0, 1],
+                    outputRange: [0.25, 0.6],
+                  }),
+                },
               ]}
             />
-            <Text style={[styles.progressText, { marginTop: 8 }]}>Loading image...</Text>
+            <Text style={[styles.progressText, { marginTop: 8 }]}>
+              Loading high-res...
+            </Text>
           </View>
         )}
       </View>
