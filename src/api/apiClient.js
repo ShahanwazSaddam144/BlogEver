@@ -35,7 +35,7 @@ function isTokenExpiring(accessToken, thresholdSeconds = 60) {
     return true; 
   }
 }
-export const API_BASE_URL = 'http://localhost:3000';
+export const API_BASE_URL = 'https://api.blogever.buttnetworks.com';
 
 export async function secureFetch(endpoint, options = {}) {
   const url = `${API_BASE_URL}${endpoint}`;
