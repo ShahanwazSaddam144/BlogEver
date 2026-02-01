@@ -10,6 +10,7 @@ import {
   Platform,
   Modal,
   Pressable,
+  ActivityIndicator,
 } from "react-native";
 import { useState, useEffect, useRef, useMemo } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -64,6 +65,7 @@ export default function ProfileScreen({ navigation }) {
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const [showDeleteBlogConfirm, setShowDeleteBlogConfirm] = useState(false);
   const [blogToDelete, setBlogToDelete] = useState(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   // Web date pickers
   const [webYear, setWebYear] = useState(null);
@@ -377,19 +379,26 @@ export default function ProfileScreen({ navigation }) {
 
   // Delete blog
   const handleDeleteBlog = async () => {
+    if (!blogToDelete) return;
+
+    setIsDeleting(true); // Start loading
     try {
-      const res = await secureFetch(`/api/my-blogs/${blogToDelete}`, {
+      const res = await secureFetch(`/api/blogs/delete/${blogToDelete}`, {
         method: "DELETE",
       });
+
       if (res.ok) {
         showAlert("Deleted!", "success");
-        fetchBlogs();
+        setBlogs((prevBlogs) =>
+          prevBlogs.filter((blog) => (blog._id || blog.id) !== blogToDelete),
+        );
       } else {
         showAlert("Failed to delete", "error");
       }
     } catch (err) {
       showAlert("Error deleting", "error");
     } finally {
+      setIsDeleting(false); // Stop loading
       setShowDeleteBlogConfirm(false);
       setBlogToDelete(null);
     }
@@ -683,40 +692,54 @@ export default function ProfileScreen({ navigation }) {
         </View>
       </Modal>
 
-      {/* Delete blog modal */}
       <Modal
         visible={showDeleteBlogConfirm}
         transparent
         animationType="fade"
         onRequestClose={() => {
-          setShowDeleteBlogConfirm(false);
-          setBlogToDelete(null);
+          if (!isDeleting) {
+            setShowDeleteBlogConfirm(false);
+            setBlogToDelete(null);
+          }
         }}
       >
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <Text style={styles.modalTitle}>Delete Blog</Text>
             <Text style={styles.modalBody}>
-              This will permanently delete the selected blog. Are you sure?
+              {isDeleting
+                ? "Processing your request..."
+                : "This will permanently delete the selected blog. Are you sure?"}
             </Text>
+
             <View style={styles.modalButtons}>
-              <Pressable
-                style={[styles.modalButton, styles.cancelButton]}
-                onPress={() => {
-                  setShowDeleteBlogConfirm(false);
-                  setBlogToDelete(null);
-                }}
-              >
-                <Text style={styles.modalButtonText}>Cancel</Text>
-              </Pressable>
-              <Pressable
-                style={[styles.modalButton, styles.deleteConfirmButton]}
-                onPress={handleDeleteBlog}
-              >
-                <Text style={[styles.modalButtonText, { color: "#fff" }]}>
-                  Delete
-                </Text>
-              </Pressable>
+              {!isDeleting ? (
+                <>
+                  <Pressable
+                    style={[styles.modalButton, styles.cancelButton]}
+                    onPress={() => {
+                      setShowDeleteBlogConfirm(false);
+                      setBlogToDelete(null);
+                    }}
+                  >
+                    <Text style={styles.modalButtonText}>Cancel</Text>
+                  </Pressable>
+                  <Pressable
+                    style={[styles.modalButton, styles.deleteConfirmButton]}
+                    onPress={handleDeleteBlog}
+                  >
+                    <Text style={[styles.modalButtonText, { color: "#fff" }]}>
+                      Delete
+                    </Text>
+                  </Pressable>
+                </>
+              ) : (
+                <ActivityIndicator
+                  size="small"
+                  color="#e74c3c"
+                  style={{ padding: 10 }}
+                />
+              )}
             </View>
           </View>
         </View>
