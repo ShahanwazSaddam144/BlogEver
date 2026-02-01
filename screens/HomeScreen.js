@@ -18,6 +18,46 @@ import { secureFetch } from "api/apiClient";
 
 const { width } = Dimensions.get("window");
 
+// --- Skeleton Component ---
+const BlogSkeleton = () => {
+  const opacity = useRef(new Animated.Value(0.3)).current;
+
+  useEffect(() => {
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(opacity, {
+          toValue: 0.7,
+          duration: 800,
+          useNativeDriver: true,
+        }),
+        Animated.timing(opacity, {
+          toValue: 0.3,
+          duration: 800,
+          useNativeDriver: true,
+        }),
+      ]),
+    ).start();
+  }, []);
+
+  return (
+    <View style={styles.blogCard}>
+      <View style={styles.blogAuthorContainer}>
+        <Animated.View style={[styles.skeletonAvatar, { opacity }]} />
+        <Animated.View style={[styles.skeletonLine, { width: 100, opacity }]} />
+      </View>
+      <Animated.View
+        style={[
+          styles.skeletonLine,
+          { width: "70%", height: 20, marginBottom: 15, opacity },
+        ]}
+      />
+      <Animated.View style={[styles.skeletonImage, { opacity }]} />
+      <Animated.View style={[styles.skeletonLine, { width: "90%", opacity }]} />
+      <Animated.View style={[styles.skeletonLine, { width: "40%", opacity }]} />
+    </View>
+  );
+};
+
 export default function HomeScreen({ navigation }) {
   const [userName, setUserName] = useState("");
   const [blogs, setBlogs] = useState([]);
@@ -38,8 +78,17 @@ export default function HomeScreen({ navigation }) {
   useEffect(() => {
     getUser();
     fetchFirstPage();
-    
   }, []);
+
+  // --- Auth Failure Handler ---
+  const handleAuthFailure = async () => {
+    await AsyncStorage.removeItem("user");
+    await AsyncStorage.removeItem("token"); // Assuming you store a token
+    navigation.reset({
+      index: 0,
+      routes: [{ name: "Login" }],
+    });
+  };
 
   const getUser = async () => {
     try {
@@ -59,6 +108,13 @@ export default function HomeScreen({ navigation }) {
           headers: { "Content-Type": "application/json" },
         },
       );
+
+      // Handle Unauthorized
+      if (res.status === 401) {
+        handleAuthFailure();
+        return false;
+      }
+
       if (!res.ok) throw new Error("Server error");
       const data = await res.json();
       const received = data.blogs || [];
@@ -74,6 +130,12 @@ export default function HomeScreen({ navigation }) {
   const fetchAllAndCache = async () => {
     try {
       const res = await secureFetch("/api/blogs", { method: "GET" });
+
+      if (res.status === 401) {
+        handleAuthFailure();
+        return false;
+      }
+
       const data = await res.json();
       const all = data.blogs || [];
       allBlogsCache.current = all;
@@ -89,7 +151,7 @@ export default function HomeScreen({ navigation }) {
   const fetchFirstPage = async () => {
     setLoading(true);
     const ok = await fetchPageFromServer(1);
-    if (!ok) await fetchAllAndCache();
+    if (!ok && !allModeFallback) await fetchAllAndCache();
     setLoading(false);
   };
 
@@ -115,6 +177,8 @@ export default function HomeScreen({ navigation }) {
   };
 
   const getRenderedBlogs = () => {
+    if (loading) return [1, 2, 3]; // Dummy data for skeleton
+
     return blogs.filter((b) => {
       const matchesCat =
         selectedCategory === "All" ||
@@ -177,11 +241,17 @@ export default function HomeScreen({ navigation }) {
       <Notifications />
       <FlatList
         data={getRenderedBlogs()}
-        keyExtractor={(item) => item._id}
+        keyExtractor={(item, index) =>
+          loading ? `skeleton-${index}` : item._id
+        }
         ListHeaderComponent={renderHeader}
-        renderItem={({ item, index }) => (
-          <BlogItem item={item} index={index} navigation={navigation} />
-        )}
+        renderItem={({ item, index }) =>
+          loading ? (
+            <BlogSkeleton />
+          ) : (
+            <BlogItem item={item} index={index} navigation={navigation} />
+          )
+        }
         onEndReached={fetchMore}
         onEndReachedThreshold={0.5}
         ListFooterComponent={
@@ -191,7 +261,7 @@ export default function HomeScreen({ navigation }) {
         }
         ListEmptyComponent={
           !loading && (
-            <Text style={{ color: "#777", textAlign: "center" }}>
+            <Text style={{ color: "#777", textAlign: "center", marginTop: 20 }}>
               No blogs found
             </Text>
           )
@@ -262,6 +332,7 @@ const BlogItem = ({ item, index, navigation }) => {
 };
 
 const styles = StyleSheet.create({
+  // ... existing styles ...
   header: { paddingTop: 45, paddingBottom: 15, alignItems: "center" },
   hello: { color: "#fff", fontSize: 22, fontWeight: "bold" },
   subText: { color: "#888", fontSize: 13, marginTop: 4 },
@@ -329,4 +400,26 @@ const styles = StyleSheet.create({
     marginVertical: 10,
   },
   blogDesc: { color: "#aaa", marginVertical: 6 },
+
+  // --- Skeleton Styles ---
+  skeletonAvatar: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    backgroundColor: "#222",
+    marginRight: 8,
+  },
+  skeletonLine: {
+    height: 12,
+    backgroundColor: "#222",
+    borderRadius: 6,
+    marginVertical: 4,
+  },
+  skeletonImage: {
+    width: "100%",
+    height: 180,
+    backgroundColor: "#222",
+    borderRadius: 10,
+    marginVertical: 10,
+  },
 });
