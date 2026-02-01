@@ -158,42 +158,54 @@ export default function FullBlogScreen({ route, navigation }) {
   );
 }
 
-const markdownStyles = {
+const markdownStyles = StyleSheet.create({
   body: {
-    color: "#ddd",
-    fontSize: 17,
-    lineHeight: 28,
-    fontWeight: "400",
+    color: "#E5E7EB",
+    fontSize: 16,
+    lineHeight: 24,
   },
-  heading1: {
-    color: "#fff",
-    fontSize: 28,
-    marginBottom: 8,
-  },
-  heading2: {
-    color: "#fff",
-    fontSize: 22,
-    marginBottom: 6,
-  },
-  link: {
-    color: "#2ecc71",
-  },
-  image: {
-    // ensure markdown images fit nicely
-    width: SCREEN_WIDTH - 40,
-    height: (SCREEN_WIDTH - 40) * 0.56, // approximate 16:9
-    resizeMode: "cover",
-    marginVertical: 12,
-    borderRadius: 10,
-  },
-  code_block: {
-    backgroundColor: "#111",
-    color: "#0f0",
+  // 2. Fenced code blocks (```) - This is usually the culprit!
+  fence: {
+    backgroundColor: "#111827",
+    borderColor: "#374151",
+    borderWidth: 1,
+    borderRadius: 8,
     padding: 12,
-    borderRadius: 6,
+    marginVertical: 10,
+    color: "#10B981", // Greenish text for code
   },
-  // you can override more rule keys — see package docs
-};
+  // 3. Indented code blocks
+  code_block: {
+    backgroundColor: "#111827",
+    borderColor: "#374151",
+    borderWidth: 1,
+    borderRadius: 8,
+    padding: 12,
+    marginVertical: 10,
+    color: "#10B981",
+  },
+  // 4. Inline code `like this`
+  code_inline: {
+    backgroundColor: "#1F2937",
+    color: "#F472B6", // Pinkish code
+    borderRadius: 4,
+    paddingHorizontal: 5,
+    paddingVertical: 2,
+  },
+  // 5. Blockquotes
+  blockquote: {
+    backgroundColor: "#111827",
+    borderLeftColor: "#2ecc71",
+    borderLeftWidth: 4,
+    paddingLeft: 12,
+    marginVertical: 10,
+    opacity: 0.8,
+  },
+  // 6. Headers
+  heading1: { color: "#FFFFFF", fontWeight: "800", marginVertical: 10 },
+  heading2: { color: "#FFFFFF", fontWeight: "700", marginVertical: 8 },
+  link: { color: "#2ecc71", textDecorationLine: "underline" },
+});
 
 const styles = StyleSheet.create({
   container: {
