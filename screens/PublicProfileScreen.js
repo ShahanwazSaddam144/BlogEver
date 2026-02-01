@@ -3,270 +3,275 @@ import {
   View,
   Text,
   StyleSheet,
-  ScrollView,
   ActivityIndicator,
-  Image,
-  TouchableOpacity,
-  Dimensions,
+  FlatList,
+  SafeAreaView,
 } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
-import { secureFetch } from "api/apiClient"; // Adjust path as needed
+import BottomBar from "../components/BottomBar";
+import { secureFetch } from "api/apiClient";
 
-const { width } = Dimensions.get("window");
+export default function PublicProfileScreen({ route }) {
+  const { email, name } = route.params;
 
-export default function PublicProfileScreen({ route, navigation }) {
-  const { email } = route.params; // Get email passed from HomeScreen
   const [profile, setProfile] = useState(null);
   const [blogs, setBlogs] = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetchPublicData();
+    fetchUserData();
   }, [email]);
 
-  const fetchPublicData = async () => {
+  const fetchUserData = async () => {
     try {
       setLoading(true);
-
-      const profileRes = await secureFetch(
+      const res = await secureFetch(
         `/api/users/profile/${encodeURIComponent(email)}`,
+        {
+          method: "GET",
+          headers: { "Content-Type": "application/json" },
+        },
       );
 
-      if (profileRes.ok) {
-        const data = await profileRes.json();
-        setProfile(data);
-      }
-      const blogRes = await secureFetch(
-        `/api/blogs/user/${encodeURIComponent(email)}`,
-      );
+      if (!res.ok) throw new Error("Profile not found");
 
-      if (blogRes.ok) {
-        const blogData = await blogRes.json();
-        setBlogs(blogData.blogs || []);
-      }
+      const data = await res.json();
+
+      // Update both states from the single response
+      setProfile(data);
+      setBlogs(data.blogs || []);
     } catch (err) {
-      console.error("Error fetching public profile:", err);
+      console.log("Fetch error:", err.message);
+      setProfile(null);
     } finally {
       setLoading(false);
     }
   };
 
+  const getInitials = (fullName = "") =>
+    fullName
+      .split(" ")
+      .filter(Boolean)
+      .map((w) => w[0])
+      .join("")
+      .substring(0, 2)
+      .toUpperCase();
+
   if (loading) {
     return (
-      <View style={styles.loadingContainer}>
+      <View style={styles.center}>
         <ActivityIndicator size="large" color="#2ecc71" />
       </View>
     );
   }
 
-  return (
-    <ScrollView
-      style={styles.container}
-      contentContainerStyle={{ paddingBottom: 50 }}
-    >
-      {/* --- Header / Back Button --- */}
-      <View style={styles.header}>
-        <TouchableOpacity
-          onPress={() => navigation.goBack()}
-          style={styles.backBtn}
-        >
-          <Ionicons name="arrow-back" size={24} color="#fff" />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>User Profile</Text>
+  if (!profile) {
+    return (
+      <View style={styles.center}>
+        <Text style={{ color: "#fff" }}>Profile not found</Text>
+        <BottomBar />
+      </View>
+    );
+  }
+
+  // Define Header to be used inside FlatList
+  const ProfileHeader = () => (
+    <View style={styles.headerContainer}>
+      {/* Avatar */}
+      <View style={styles.avatar}>
+        <Text style={styles.avatarText}>{getInitials(name)}</Text>
       </View>
 
-      {/* --- Profile Card --- */}
-      {profile ? (
-        <View style={styles.profileCard}>
-          <View style={styles.avatarContainer}>
-            <View style={styles.avatar}>
-              <Text style={styles.avatarText}>
-                {(profile.name || "U")[0].toUpperCase()}
+      {/* Name & Role */}
+      <Text style={styles.name}>{name}</Text>
+      <Text style={styles.role}>{profile.role || "User"}</Text>
+
+      {/* Profile Info */}
+      <View style={styles.card}>
+        <Text style={styles.label}>Description</Text>
+        <Text style={styles.value}>{profile.desc ?? "No bio provided"}</Text>
+
+        <View style={styles.divider} />
+
+        <Text style={styles.label}>Age</Text>
+        <Text style={styles.value}>
+          {profile.age !== undefined && profile.age !== null
+            ? String(profile.age)
+            : "—"}
+        </Text>
+
+        <View style={styles.divider} />
+
+        <Text style={styles.label}>Email</Text>
+        <Text style={styles.value}>{profile.email}</Text>
+      </View>
+
+      <Text style={styles.blogTitle}>
+        Blogs by {name} ({blogs.length})
+      </Text>
+    </View>
+  );
+
+  return (
+    <SafeAreaView style={styles.container}>
+      <FlatList
+        data={blogs}
+        keyExtractor={(item) => item._id || Math.random().toString()}
+        ListHeaderComponent={ProfileHeader}
+        contentContainerStyle={{ paddingBottom: 100 }}
+        ListEmptyComponent={
+          <Text style={styles.noBlogs}>No blogs posted yet.</Text>
+        }
+        renderItem={({ item }) => (
+          <View style={styles.blogCardWrapper}>
+            <View style={styles.blogCard}>
+              <Text style={styles.blogName}>{item.name ?? item.title}</Text>
+              <Text style={styles.blogDesc} numberOfLines={3}>
+                {item.desc ?? "—"}
               </Text>
-            </View>
-            <View style={styles.profileInfo}>
-              <Text style={styles.name}>{profile.name}</Text>
-              <Text style={styles.email}>{profile.email}</Text>
-              <View style={styles.badge}>
-                <Text style={styles.badgeText}>{profile.role || "Member"}</Text>
+
+              <View style={styles.blogFooter}>
+                <View style={styles.blogcategoryContainer}>
+                  <Text style={styles.categoryHeading}>Category:</Text>
+                  <Text style={styles.blogCategory}>
+                    {item.category ?? "General"}
+                  </Text>
+                </View>
+                <Text style={styles.blogDate}>
+                  {item.createdAt
+                    ? new Date(item.createdAt).toDateString()
+                    : ""}
+                </Text>
               </View>
             </View>
           </View>
-
-          <View style={styles.statsRow}>
-            <View style={styles.stat}>
-              <Text style={styles.statVal}>{blogs.length}</Text>
-              <Text style={styles.statLabel}>Blogs</Text>
-            </View>
-            <View style={styles.stat}>
-              <Text style={styles.statVal}>
-                {profile.age ? profile.age : "N/A"}
-              </Text>
-              <Text style={styles.statLabel}>Age</Text>
-            </View>
-          </View>
-
-          <View style={styles.divider} />
-
-          <Text style={styles.sectionTitle}>About</Text>
-          <Text style={styles.desc}>
-            {profile.desc || "No description provided."}
-          </Text>
-        </View>
-      ) : (
-        <Text style={styles.errorText}>User details not found.</Text>
-      )}
-
-      {/* --- User's Blogs Section --- */}
-      <Text style={styles.blogSectionTitle}>
-        Blogs by {profile?.name?.split(" ")[0] || "User"}
-      </Text>
-
-      {blogs.length === 0 ? (
-        <Text style={styles.emptyText}>No blogs posted yet.</Text>
-      ) : (
-        blogs.map((item) => (
-          <TouchableOpacity
-            key={item._id}
-            style={styles.blogCard}
-            onPress={() =>
-              navigation.navigate("FullBlogScreen", { blogId: item._id })
-            }
-          >
-            <Text style={styles.blogTitle}>{item.name}</Text>
-            {item.image?.url && (
-              <Image
-                source={{ uri: item.image.url }}
-                style={styles.blogImage}
-                resizeMode="cover"
-              />
-            )}
-            <Text numberOfLines={2} style={styles.blogDesc}>
-              {item.desc}
-            </Text>
-            <Text style={styles.readMore}>Read Article →</Text>
-          </TouchableOpacity>
-        ))
-      )}
-    </ScrollView>
+        )}
+      />
+      <BottomBar />
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#000" },
-  loadingContainer: {
+  container: {
+    flex: 1,
+    backgroundColor: "#000",
+  },
+  center: {
     flex: 1,
     backgroundColor: "#000",
     justifyContent: "center",
     alignItems: "center",
   },
-  header: {
-    flexDirection: "row",
+  headerContainer: {
     alignItems: "center",
-    paddingTop: 50,
-    paddingHorizontal: 20,
-    marginBottom: 20,
-  },
-  backBtn: { marginRight: 15 },
-  headerTitle: { color: "#fff", fontSize: 20, fontWeight: "bold" },
-
-  // Profile Card Styles
-  profileCard: {
-    backgroundColor: "#111",
-    marginHorizontal: 15,
-    borderRadius: 16,
-    padding: 20,
-    borderWidth: 1,
-    borderColor: "#222",
-  },
-  avatarContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginBottom: 20,
+    paddingTop: 24,
+    paddingHorizontal: 16,
   },
   avatar: {
-    width: 70,
-    height: 70,
-    borderRadius: 35,
+    width: 100,
+    height: 100,
+    borderRadius: 50,
     backgroundColor: "#2ecc71",
     justifyContent: "center",
     alignItems: "center",
-    marginRight: 15,
+    marginBottom: 12,
   },
-  avatarText: { fontSize: 30, fontWeight: "bold", color: "#000" },
-  profileInfo: { flex: 1 },
-  name: { color: "#fff", fontSize: 22, fontWeight: "bold" },
-  email: { color: "#888", fontSize: 13, marginTop: 2 },
-  badge: {
-    backgroundColor: "#222",
-    alignSelf: "flex-start",
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 4,
-    marginTop: 8,
-    borderWidth: 1,
-    borderColor: "#333",
-  },
-  badgeText: {
-    color: "#2ecc71",
-    fontSize: 10,
+  avatarText: {
+    color: "#000",
+    fontSize: 36,
     fontWeight: "bold",
+  },
+  name: {
+    color: "#fff",
+    fontSize: 22,
+    fontWeight: "bold",
+    marginTop: 5,
+  },
+  role: {
+    color: "#2ecc71",
+    fontSize: 14,
+    marginBottom: 16,
+  },
+  card: {
+    backgroundColor: "#111",
+    width: "100%",
+    borderRadius: 14,
+    padding: 16,
+    marginBottom: 18,
+  },
+  label: {
+    color: "#888",
+    fontSize: 12,
+    marginBottom: 4,
+    fontWeight: "600",
     textTransform: "uppercase",
   },
-
-  statsRow: {
-    flexDirection: "row",
-    justifyContent: "space-around",
-    marginBottom: 20,
-  },
-  stat: { alignItems: "center" },
-  statVal: { color: "#fff", fontSize: 20, fontWeight: "bold" },
-  statLabel: { color: "#666", fontSize: 12 },
-
-  divider: { height: 1, backgroundColor: "#222", marginBottom: 15 },
-  sectionTitle: {
+  value: {
     color: "#fff",
-    fontSize: 16,
-    fontWeight: "bold",
-    marginBottom: 8,
+    fontSize: 15,
+    lineHeight: 22,
   },
-  desc: { color: "#ccc", fontSize: 14, lineHeight: 22 },
-  errorText: { color: "#e74c3c", textAlign: "center", marginTop: 20 },
-
-  // Blog List Styles
-  blogSectionTitle: {
-    color: "#fff",
-    fontSize: 18,
-    fontWeight: "bold",
-    marginLeft: 15,
-    marginTop: 30,
-    marginBottom: 15,
-  },
-  emptyText: {
-    color: "#666",
-    textAlign: "center",
-    marginTop: 10,
-    fontStyle: "italic",
-  },
-  blogCard: {
-    backgroundColor: "#111",
-    padding: 15,
-    borderRadius: 12,
-    marginHorizontal: 15,
-    marginBottom: 15,
+  divider: {
+    height: 1,
+    backgroundColor: "#222",
+    marginVertical: 10,
   },
   blogTitle: {
     color: "#fff",
-    fontSize: 16,
+    fontSize: 18,
     fontWeight: "bold",
-    marginBottom: 10,
+    alignSelf: "flex-start",
+    marginBottom: 15,
   },
-  blogImage: { width: "100%", height: 150, borderRadius: 8, marginBottom: 10 },
-  blogDesc: { color: "#aaa", fontSize: 13 },
-  readMore: {
-    color: "#2ecc71",
-    marginTop: 10,
-    fontSize: 12,
+  noBlogs: {
+    color: "#777",
+    textAlign: "center",
+    marginTop: 20,
+  },
+  blogCardWrapper: {
+    paddingHorizontal: 16,
+  },
+  blogCard: {
+    backgroundColor: "#111",
+    padding: 14,
+    borderRadius: 12,
+    marginBottom: 12,
+  },
+  blogName: {
+    color: "#fff",
+    fontSize: 18,
     fontWeight: "bold",
+  },
+  blogDesc: {
+    color: "#aaa",
+    marginTop: 6,
+    lineHeight: 20,
+  },
+  blogFooter: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginTop: 12,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: "#222",
+  },
+  blogcategoryContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  categoryHeading: {
+    color: "#777",
+    fontSize: 12,
+    marginRight: 4,
+  },
+  blogCategory: {
+    color: "#2ecc71",
+    fontWeight: "bold",
+    fontSize: 12,
+  },
+  blogDate: {
+    color: "#555",
+    fontSize: 11,
   },
 });

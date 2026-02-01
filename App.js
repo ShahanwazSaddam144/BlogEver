@@ -1,15 +1,15 @@
-import { NavigationContainer } from '@react-navigation/native';
-import { createNativeStackNavigator } from '@react-navigation/native-stack';
+import { NavigationContainer } from "@react-navigation/native";
+import { createNativeStackNavigator } from "@react-navigation/native-stack";
 
-import WelcomeScreen from './screens/WelcomeScreen';
-import LoginScreen from './screens/LoginScreen';
-import HomeScreen from './screens/HomeScreen';
-import ProfileScreen from './screens/ProfileScreen';
-import AddBlogScreen from './screens/AddBlogScreen';
-import UserProfileScreen from './screens/userProfileScreen';
-import FullBlogScreen from './screens/FullBlogScreen';
-import NotificationScreen from './screens/NotificationScreen';
-import PublicProfileScreen from './screens/PublicProfileScreen';
+import WelcomeScreen from "./screens/WelcomeScreen";
+import LoginScreen from "./screens/LoginScreen";
+import HomeScreen from "./screens/HomeScreen";
+import ProfileScreen from "./screens/ProfileScreen";
+import AddBlogScreen from "./screens/AddBlogScreen";
+import UserProfileScreen from "./screens/userProfileScreen";
+import FullBlogScreen from "./screens/FullBlogScreen";
+import NotificationScreen from "./screens/NotificationScreen";
+import PublicProfileScreen from "./screens/PublicProfileScreen";
 const Stack = createNativeStackNavigator();
 
 export default function App() {
@@ -22,10 +22,16 @@ export default function App() {
         <Stack.Screen name="ProfileScreen" component={ProfileScreen} />
         <Stack.Screen name="AddBlogScreen" component={AddBlogScreen} />
         <Stack.Screen name="userProfileScreen" component={UserProfileScreen} />
-        <Stack.Screen name="PublicProfileScreen" component={PublicProfileScreen} />
+        <Stack.Screen
+          name="PublicProfileScreen"
+          component={PublicProfileScreen}
+        />
         <Stack.Screen name="FullBlogScreen" component={FullBlogScreen} />
-        <Stack.Screen name="NotificationScreen" component={NotificationScreen} />
-      </Stack.Navigator> 
+        <Stack.Screen
+          name="NotificationScreen"
+          component={NotificationScreen}
+        />
+      </Stack.Navigator>
     </NavigationContainer>
   );
 }

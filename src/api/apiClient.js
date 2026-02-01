@@ -19,10 +19,21 @@ function notifyQueuedRequests(newAccessToken) {
 
 
 function isTokenExpiring(accessToken, thresholdSeconds = 60) {
-  if (!accessToken) return true;
-  const { exp } = jwtDecode(accessToken);
-  const now = Math.floor(Date.now() / 1000);
-  return exp - now < thresholdSeconds;
+  if (!accessToken || typeof accessToken !== 'string') return true;
+  
+  try {
+    const parts = accessToken.split('.');
+    if (parts.length !== 3) return true;
+
+    const decoded = jwtDecode(accessToken);
+    if (!decoded || !decoded.exp) return true;
+
+    const now = Math.floor(Date.now() / 1000);
+    return decoded.exp - now < thresholdSeconds;
+  } catch (e) {
+    console.error("JWT Decode failed:", e);
+    return true; 
+  }
 }
 export const API_BASE_URL = 'http://localhost:3000';
 

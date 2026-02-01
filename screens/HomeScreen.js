@@ -12,11 +12,11 @@ import {
   Image,
   ScrollView,
 } from "react-native";
+import { useNavigation } from "@react-navigation/native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import BottomBar from "../components/BottomBar";
 import Notifications from "../components/Notifications";
 import { secureFetch } from "api/apiClient";
-import { useNavigation } from "@react-navigation/native";
 
 const { width } = Dimensions.get("window");
 
@@ -72,7 +72,8 @@ const HomeHeader = ({
   selectedCategory,
   setSelectedCategory,
   categories,
-}) => {
+})=> {
+  const navigation = useNavigation();
   return (
     <View>
       <View style={styles.header}>
@@ -107,11 +108,9 @@ const HomeHeader = ({
               <TouchableOpacity
                 key={user.email}
                 style={styles.userResultCard}
-                // --- ADD ONPRESS HERE ---
+              
                 onPress={() =>
-                  navigation.navigate("PublicProfileScreen", {
-                    email: user.email,
-                  })
+                  navigation.navigate("PublicProfileScreen", { email: user.email,name:user.name })
                 }
               >
                 <View style={styles.userResultAvatar}>

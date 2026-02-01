@@ -78,7 +78,7 @@ export default function AuthScreen({ navigation }) {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: "",
+
         },
         body: JSON.stringify({email, password }),
       });
