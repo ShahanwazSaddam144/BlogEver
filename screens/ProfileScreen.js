@@ -232,7 +232,7 @@ export default function ProfileScreen({ navigation }) {
           <View style={styles.settingsPopup}>
             <TouchableOpacity
               style={styles.popupItem}
-              onPress={handleLogout} // Directly calls logout as requested
+              onPress={handleLogout} 
             >
               <Ionicons
                 name="log-out-outline"

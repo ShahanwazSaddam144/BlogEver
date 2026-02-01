@@ -90,7 +90,7 @@ const HomeHeader = ({
         autoCapitalize="none"
       />
 
-    <View style={{ minHeight: 10 }}>
+      <View style={{ minHeight: 10 }}>
         {searchingUsers ? (
           <ActivityIndicator
             color="#2ecc71"
@@ -105,22 +105,28 @@ const HomeHeader = ({
           >
             {userSearchResults.map((user) => (
               <TouchableOpacity
-                // FIX: Use email as the key since _id is removed
-                key={user.email} 
+                key={user.email}
                 style={styles.userResultCard}
+                // --- ADD ONPRESS HERE ---
+                onPress={() =>
+                  navigation.navigate("PublicProfileScreen", {
+                    email: user.email,
+                  })
+                }
               >
                 <View style={styles.userResultAvatar}>
                   <Text style={styles.userResultAvatarText}>
-                    {/* Render initials from name */}
                     {(user.name || "U")[0].toUpperCase()}
                   </Text>
                 </View>
                 <Text numberOfLines={1} style={styles.userResultName}>
                   {user.name}
                 </Text>
-                {/* Optional: Show role if it exists */}
+                {/* Optional Role */}
                 {user.role ? (
-                   <Text style={{color: '#666', fontSize: 10}}>{user.role}</Text>
+                  <Text style={{ color: "#666", fontSize: 10 }}>
+                    {user.role}
+                  </Text>
                 ) : null}
               </TouchableOpacity>
             ))}
@@ -233,10 +239,13 @@ export default function HomeScreen({ navigation }) {
   const searchUsers = async (query) => {
     setSearchingUsers(true);
     try {
-      const trimedQuery= query.trim();
-      const res = await secureFetch(`/api/users/${encodeURIComponent(trimedQuery)}`, {
-        method: "GET",
-      });
+      const trimedQuery = query.trim();
+      const res = await secureFetch(
+        `/api/users/${encodeURIComponent(trimedQuery)}`,
+        {
+          method: "GET",
+        },
+      );
 
       if (res.status === 401) {
         handleAuthFailure();

@@ -9,7 +9,7 @@ import AddBlogScreen from './screens/AddBlogScreen';
 import UserProfileScreen from './screens/userProfileScreen';
 import FullBlogScreen from './screens/FullBlogScreen';
 import NotificationScreen from './screens/NotificationScreen';
-
+import PublicProfileScreen from './screens/PublicProfileScreen';
 const Stack = createNativeStackNavigator();
 
 export default function App() {
@@ -22,6 +22,7 @@ export default function App() {
         <Stack.Screen name="ProfileScreen" component={ProfileScreen} />
         <Stack.Screen name="AddBlogScreen" component={AddBlogScreen} />
         <Stack.Screen name="userProfileScreen" component={UserProfileScreen} />
+        <Stack.Screen name="PublicProfileScreen" component={PublicProfileScreen} />
         <Stack.Screen name="FullBlogScreen" component={FullBlogScreen} />
         <Stack.Screen name="NotificationScreen" component={NotificationScreen} />
       </Stack.Navigator> 
