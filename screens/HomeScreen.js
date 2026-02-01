@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef } from "react";
+import React, { useEffect, useState, useRef, useCallback } from "react";
 import {
   View,
   Text,
@@ -10,11 +10,13 @@ import {
   Animated,
   Dimensions,
   Image,
+  ScrollView,
 } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import BottomBar from "../components/BottomBar";
 import Notifications from "../components/Notifications";
 import { secureFetch } from "api/apiClient";
+import { useNavigation } from "@react-navigation/native";
 
 const { width } = Dimensions.get("window");
 
@@ -58,21 +60,133 @@ const BlogSkeleton = () => {
   );
 };
 
+// --- Header Component (Extracted to fix Input Focus Bug) ---
+const HomeHeader = ({
+  userName,
+  userSearch,
+  setUserSearch,
+  userSearchResults,
+  searchingUsers,
+  blogSearch,
+  setBlogSearch,
+  selectedCategory,
+  setSelectedCategory,
+  categories,
+}) => {
+  return (
+    <View>
+      <View style={styles.header}>
+        <Text style={styles.hello}>Hello, {userName || "Guest"} 👋</Text>
+        <Text style={styles.subText}>Explore and interact with users</Text>
+      </View>
+
+      <Text style={styles.sectionTitle}>Find Users</Text>
+      <TextInput
+        placeholder="Search users by name..."
+        placeholderTextColor="#777"
+        style={styles.searchInput}
+        value={userSearch}
+        onChangeText={setUserSearch}
+        autoCapitalize="none"
+      />
+
+    <View style={{ minHeight: 10 }}>
+        {searchingUsers ? (
+          <ActivityIndicator
+            color="#2ecc71"
+            style={{ marginLeft: 20, alignSelf: "flex-start" }}
+          />
+        ) : userSearchResults.length > 0 ? (
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            style={styles.userListContainer}
+            contentContainerStyle={{ paddingRight: 20 }}
+          >
+            {userSearchResults.map((user) => (
+              <TouchableOpacity
+                // FIX: Use email as the key since _id is removed
+                key={user.email} 
+                style={styles.userResultCard}
+              >
+                <View style={styles.userResultAvatar}>
+                  <Text style={styles.userResultAvatarText}>
+                    {/* Render initials from name */}
+                    {(user.name || "U")[0].toUpperCase()}
+                  </Text>
+                </View>
+                <Text numberOfLines={1} style={styles.userResultName}>
+                  {user.name}
+                </Text>
+                {/* Optional: Show role if it exists */}
+                {user.role ? (
+                   <Text style={{color: '#666', fontSize: 10}}>{user.role}</Text>
+                ) : null}
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+        ) : userSearch.length > 1 ? (
+          <Text style={styles.noUsersText}>No users found</Text>
+        ) : null}
+      </View>
+
+      {/* --- Blog Search & Filter Section --- */}
+      <Text style={styles.sectionTitle}>All Blogs</Text>
+      <TextInput
+        placeholder="Search blogs..."
+        placeholderTextColor="#777"
+        style={styles.searchInput}
+        value={blogSearch}
+        onChangeText={setBlogSearch}
+      />
+      <View style={styles.categoryRow}>
+        {categories.map((cat) => (
+          <TouchableOpacity
+            key={cat}
+            onPress={() => setSelectedCategory(cat)}
+            style={[
+              styles.categoryBtn,
+              selectedCategory === cat && styles.activeCategory,
+            ]}
+          >
+            <Text
+              style={[
+                styles.categoryText,
+                selectedCategory === cat && { color: "#000" },
+              ]}
+            >
+              {cat}
+            </Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+    </View>
+  );
+};
+
 export default function HomeScreen({ navigation }) {
   const [userName, setUserName] = useState("");
+
+  // Blog State
   const [blogs, setBlogs] = useState([]);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [hasMore, setHasMore] = useState(true);
-  const pageRef = useRef(1);
-  const PAGE_SIZE = 5;
 
-  const [allModeFallback, setAllModeFallback] = useState(false);
-  const allBlogsCache = useRef([]);
-
+  // User Search State
   const [userSearch, setUserSearch] = useState("");
+  const [userSearchResults, setUserSearchResults] = useState([]);
+  const [searchingUsers, setSearchingUsers] = useState(false);
+
+  // Filter State
   const [blogSearch, setBlogSearch] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("All");
+
+  const pageRef = useRef(1);
+  const PAGE_SIZE = 5;
+  const allBlogsCache = useRef([]);
+  const [allModeFallback, setAllModeFallback] = useState(false);
+
   const categories = ["All", "Coding", "Fun", "Entertainment", "Other"];
 
   useEffect(() => {
@@ -80,14 +194,30 @@ export default function HomeScreen({ navigation }) {
     fetchFirstPage();
   }, []);
 
-  // --- Auth Failure Handler ---
+  // --- Debounced User Search ---
+  useEffect(() => {
+    const delayDebounceFn = setTimeout(() => {
+      if (userSearch.trim().length > 0) {
+        searchUsers(userSearch);
+      } else {
+        setUserSearchResults([]);
+      }
+    }, 500); // Wait 500ms after typing stops
+
+    return () => clearTimeout(delayDebounceFn);
+  }, [userSearch]);
+
   const handleAuthFailure = async () => {
-    await AsyncStorage.removeItem("user");
-    await AsyncStorage.removeItem("token"); // Assuming you store a token
-    navigation.reset({
-      index: 0,
-      routes: [{ name: "Login" }],
-    });
+    try {
+      await AsyncStorage.removeItem("user");
+      await AsyncStorage.removeItem("token");
+      navigation.reset({
+        index: 0,
+        routes: [{ name: "Login" }],
+      });
+    } catch (e) {
+      console.error("Auth reset error", e);
+    }
   };
 
   const getUser = async () => {
@@ -99,6 +229,35 @@ export default function HomeScreen({ navigation }) {
     }
   };
 
+  // --- Fetch Users Logic ---
+  const searchUsers = async (query) => {
+    setSearchingUsers(true);
+    try {
+      const trimedQuery= query.trim();
+      const res = await secureFetch(`/api/users/${encodeURIComponent(trimedQuery)}`, {
+        method: "GET",
+      });
+
+      if (res.status === 401) {
+        handleAuthFailure();
+        return;
+      }
+
+      if (res.ok) {
+        const data = await res.json();
+        setUserSearchResults(data.profile || []);
+      } else {
+        setUserSearchResults([]);
+      }
+    } catch (err) {
+      console.error("User search error:", err);
+      setUserSearchResults([]);
+    } finally {
+      setSearchingUsers(false);
+    }
+  };
+
+  // --- Fetch Blogs Logic ---
   const fetchPageFromServer = async (page = 1) => {
     try {
       const res = await secureFetch(
@@ -109,7 +268,6 @@ export default function HomeScreen({ navigation }) {
         },
       );
 
-      // Handle Unauthorized
       if (res.status === 401) {
         handleAuthFailure();
         return false;
@@ -130,12 +288,10 @@ export default function HomeScreen({ navigation }) {
   const fetchAllAndCache = async () => {
     try {
       const res = await secureFetch("/api/blogs", { method: "GET" });
-
       if (res.status === 401) {
         handleAuthFailure();
         return false;
       }
-
       const data = await res.json();
       const all = data.blogs || [];
       allBlogsCache.current = all;
@@ -177,7 +333,7 @@ export default function HomeScreen({ navigation }) {
   };
 
   const getRenderedBlogs = () => {
-    if (loading) return [1, 2, 3]; // Dummy data for skeleton
+    if (loading) return [1, 2, 3];
 
     return blogs.filter((b) => {
       const matchesCat =
@@ -190,61 +346,29 @@ export default function HomeScreen({ navigation }) {
     });
   };
 
-  const renderHeader = () => (
-    <View>
-      <View style={styles.header}>
-        <Text style={styles.hello}>Hello, {userName || "Guest"} 👋</Text>
-        <Text style={styles.subText}>Explore and interact with users</Text>
-      </View>
-      <Text style={styles.sectionTitle}>All Users</Text>
-      <TextInput
-        placeholder="Search users..."
-        placeholderTextColor="#777"
-        style={styles.searchInput}
-        value={userSearch}
-        onChangeText={setUserSearch}
-      />
-      <Text style={styles.sectionTitle}>All Blogs</Text>
-      <TextInput
-        placeholder="Search blogs..."
-        placeholderTextColor="#777"
-        style={styles.searchInput}
-        value={blogSearch}
-        onChangeText={setBlogSearch}
-      />
-      <View style={styles.categoryRow}>
-        {categories.map((cat) => (
-          <TouchableOpacity
-            key={cat}
-            onPress={() => setSelectedCategory(cat)}
-            style={[
-              styles.categoryBtn,
-              selectedCategory === cat && styles.activeCategory,
-            ]}
-          >
-            <Text
-              style={[
-                styles.categoryText,
-                selectedCategory === cat && { color: "#000" },
-              ]}
-            >
-              {cat}
-            </Text>
-          </TouchableOpacity>
-        ))}
-      </View>
-    </View>
-  );
-
   return (
     <View style={{ flex: 1, backgroundColor: "#000" }}>
       <Notifications />
       <FlatList
         data={getRenderedBlogs()}
         keyExtractor={(item, index) =>
-          loading ? `skeleton-${index}` : item._id
+          loading ? `skeleton-${index}` : item._id || index.toString()
         }
-        ListHeaderComponent={renderHeader}
+        // IMPORTANT: Passing the HomeHeader component here
+        ListHeaderComponent={
+          <HomeHeader
+            userName={userName}
+            userSearch={userSearch}
+            setUserSearch={setUserSearch}
+            userSearchResults={userSearchResults}
+            searchingUsers={searchingUsers}
+            blogSearch={blogSearch}
+            setBlogSearch={setBlogSearch}
+            selectedCategory={selectedCategory}
+            setSelectedCategory={setSelectedCategory}
+            categories={categories}
+          />
+        }
         renderItem={({ item, index }) =>
           loading ? (
             <BlogSkeleton />
@@ -332,7 +456,6 @@ const BlogItem = ({ item, index, navigation }) => {
 };
 
 const styles = StyleSheet.create({
-  // ... existing styles ...
   header: { paddingTop: 45, paddingBottom: 15, alignItems: "center" },
   hello: { color: "#fff", fontSize: 22, fontWeight: "bold" },
   subText: { color: "#888", fontSize: 13, marginTop: 4 },
@@ -352,6 +475,44 @@ const styles = StyleSheet.create({
     marginHorizontal: 15,
     marginBottom: 10,
   },
+  // User Search Styles
+  userListContainer: {
+    paddingLeft: 15,
+    marginBottom: 10,
+  },
+  userResultCard: {
+    marginRight: 15,
+    alignItems: "center",
+    width: 70,
+  },
+  userResultAvatar: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    backgroundColor: "#333",
+    justifyContent: "center",
+    alignItems: "center",
+    marginBottom: 5,
+    borderWidth: 1,
+    borderColor: "#444",
+  },
+  userResultAvatarText: {
+    color: "#2ecc71",
+    fontWeight: "bold",
+    fontSize: 18,
+  },
+  userResultName: {
+    color: "#fff",
+    fontSize: 12,
+    textAlign: "center",
+  },
+  noUsersText: {
+    color: "#555",
+    marginLeft: 15,
+    marginBottom: 10,
+    fontSize: 13,
+  },
+
   categoryRow: {
     flexDirection: "row",
     flexWrap: "wrap",
@@ -403,8 +564,8 @@ const styles = StyleSheet.create({
 
   // --- Skeleton Styles ---
   skeletonAvatar: {
-    width: 20,
-    height: 15,
+    width: 30,
+    height: 30,
     borderRadius: 15,
     backgroundColor: "#222",
     marginRight: 8,

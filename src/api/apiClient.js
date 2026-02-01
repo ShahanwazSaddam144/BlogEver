@@ -24,7 +24,7 @@ function isTokenExpiring(accessToken, thresholdSeconds = 60) {
   const now = Math.floor(Date.now() / 1000);
   return exp - now < thresholdSeconds;
 }
-export const API_BASE_URL = 'https://api.blogever.buttnetworks.com';
+export const API_BASE_URL = 'http://localhost:3000';
 
 export async function secureFetch(endpoint, options = {}) {
   const url = `${API_BASE_URL}${endpoint}`;
@@ -43,7 +43,7 @@ export async function secureFetch(endpoint, options = {}) {
         body: JSON.stringify({ refreshToken }),
       });
 
-      if (!response.ok) {
+      if (response.status === 401) {
         await AsyncStorage.removeItem('accessToken');
         await AsyncStorage.removeItem('refreshToken');
         isRefreshing = false;

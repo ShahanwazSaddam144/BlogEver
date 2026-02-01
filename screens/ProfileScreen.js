@@ -152,7 +152,25 @@ export default function ProfileScreen({ navigation }) {
       console.log("Blog Fetch Error:", err);
     }
   };
+  const handleLogout = async () => {
+    try {
+      const keysToRemove = ["user", "accessToken", "refreshToken"];
+      await AsyncStorage.multiRemove(keysToRemove);
 
+      // Close popups
+      setShowLogoutConfirm(false);
+      setShowSettingsPopup(false);
+
+      // Reset navigation to Login screen
+      navigation.reset({
+        index: 0,
+        routes: [{ name: "Login" }],
+      });
+    } catch (err) {
+      console.error("Logout Error:", err);
+      showAlert("Error logging out", "error");
+    }
+  };
   const handleSaveProfile = async () => {
     if (!desc || !role) return showAlert("Fill all fields", "error");
 
@@ -214,9 +232,17 @@ export default function ProfileScreen({ navigation }) {
           <View style={styles.settingsPopup}>
             <TouchableOpacity
               style={styles.popupItem}
-              onPress={() => setShowLogoutConfirm(true)}
+              onPress={handleLogout} // Directly calls logout as requested
             >
-              <Text style={styles.popupItemText}>Logout</Text>
+              <Ionicons
+                name="log-out-outline"
+                size={18}
+                color="#e74c3c"
+                style={{ marginRight: 8 }}
+              />
+              <Text style={[styles.popupItemText, { color: "#e74c3c" }]}>
+                Logout
+              </Text>
             </TouchableOpacity>
           </View>
         )}
