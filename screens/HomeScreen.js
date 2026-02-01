@@ -403,8 +403,8 @@ const styles = StyleSheet.create({
 
   // --- Skeleton Styles ---
   skeletonAvatar: {
-    width: 30,
-    height: 30,
+    width: 20,
+    height: 15,
     borderRadius: 15,
     backgroundColor: "#222",
     marginRight: 8,
