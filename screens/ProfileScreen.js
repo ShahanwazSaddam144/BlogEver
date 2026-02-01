@@ -8,6 +8,8 @@ import {
   Animated,
   Image,
   Platform,
+  Modal,
+  Pressable,
 } from "react-native";
 import { useState, useEffect, useRef, useMemo } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -43,7 +45,7 @@ export default function ProfileScreen({ navigation }) {
   const [initials, setInitials] = useState("");
   const [desc, setDesc] = useState("");
   const [role, setRole] = useState("");
-  const [dob, setDob] = useState(new Date());
+  const [dob, setDob] = useState(null); // null = not set
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [profileExists, setProfileExists] = useState(false);
   const [editMode, setEditMode] = useState(false);
@@ -58,7 +60,9 @@ export default function ProfileScreen({ navigation }) {
   const [showDeleteBlogConfirm, setShowDeleteBlogConfirm] = useState(false);
   const [blogToDelete, setBlogToDelete] = useState(null);
 
-  const age = useMemo(() => {
+  // derived/computed age from DOB
+  const computedAgeFromDob = useMemo(() => {
+    if (!dob) return 0;
     const today = new Date();
     let calculatedAge = today.getFullYear() - dob.getFullYear();
     const m = today.getMonth() - dob.getMonth();
@@ -90,7 +94,10 @@ export default function ProfileScreen({ navigation }) {
 
   const initializeData = async () => {
     try {
-      // 1. Get basic user info from login session
+      // 1. Attempt to fetch user info from server first (as requested)
+      await fetchUserInfo();
+
+      // 2. Still try to populate instant UI from cached login session
       const user = await AsyncStorage.getItem("user");
       if (user) {
         const parsed = JSON.parse(user);
@@ -105,42 +112,96 @@ export default function ProfileScreen({ navigation }) {
         );
       }
 
-      // 2. Load cached profile from AsyncStorage first (Instant UI)
+      // 3. Load cached profile if present (fallback quick-render)
       const cachedInfo = await AsyncStorage.getItem("my-info");
       if (cachedInfo) {
         const data = JSON.parse(cachedInfo);
         applyProfileData(data);
       }
-
-      // 3. Fetch fresh data from server
-      fetchFreshProfile();
-      fetchBlogs();
     } catch (err) {
       console.log("Init Error:", err);
     }
   };
 
   const applyProfileData = (data) => {
+    // data may contain: name, email, desc, role, dob, age, blogs
+    if (!data) return;
+    if (data.name) {
+      setUserName(data.name);
+      setInitials(
+        data.name
+          ?.split(" ")
+          .map((n) => n[0])
+          .join("")
+          .toUpperCase(),
+      );
+    }
+    if (data.email) setUserEmail(data.email);
     setDesc(data.desc || "");
     setRole(data.role || "");
-    if (data.dob) setDob(new Date(data.dob));
-    setProfileExists(true);
+
+    // Prefer dob if provided. If no dob but age provided, approximate DOB as Jan 1.
+    if (data.dob) {
+      try {
+        setDob(new Date(data.dob));
+      } catch (e) {
+        setDob(null);
+      }
+    } else if (typeof data.age === "number" && data.age > 0) {
+      const year = new Date().getFullYear() - data.age;
+      setDob(new Date(year, 0, 1));
+    } else {
+      setDob(null);
+    }
+
+    // blogs may be returned together
+    const foundBlogs =
+      data.blogs ||
+      data.userBlogs ||
+      data.blogList ||
+      (data.user && data.user.blogs) ||
+      [];
+    setBlogs(foundBlogs || []);
+
+    // consider profileExists true if any descriptive field exists
+    const exists = !!(
+      data.desc ||
+      data.role ||
+      data.dob ||
+      (typeof data.age === "number" && data.age > 0)
+    );
+    setProfileExists(exists);
   };
 
-  const fetchFreshProfile = async () => {
+  // fetch user info from /api/user/info (first)
+  const fetchUserInfo = async () => {
     try {
-      const res = await secureFetch("/api/my-info");
+      const res = await secureFetch("/api/user/info");
       if (res.ok) {
         const data = await res.json();
-        // Update Cache
+        // cache
         await AsyncStorage.setItem("my-info", JSON.stringify(data));
         applyProfileData(data);
+        // also set top-level user name/email if present in response
+        if (data.name) setUserName(data.name);
+        if (data.email) setUserEmail(data.email);
+        // if server returns blogs at top-level, set them
+        const foundBlogs =
+          data.blogs ||
+          data.userBlogs ||
+          data.blogList ||
+          (data.user && data.user.blogs) ||
+          [];
+        setBlogs(foundBlogs || []);
+      } else {
+        console.log("fetchUserInfo: server responded not OK", res.status);
       }
     } catch (err) {
-      console.log("Profile Sync Error:", err);
+      console.log("fetchUserInfo Error:", err);
     }
   };
 
+  // Note: keep fetchBlogs for compatibility if your backend has dedicated endpoint
   const fetchBlogs = async () => {
     try {
       const res = await secureFetch("/api/blogs/my-blogs");
@@ -152,6 +213,7 @@ export default function ProfileScreen({ navigation }) {
       console.log("Blog Fetch Error:", err);
     }
   };
+
   const handleLogout = async () => {
     try {
       const keysToRemove = ["user", "accessToken", "refreshToken"];
@@ -171,23 +233,38 @@ export default function ProfileScreen({ navigation }) {
       showAlert("Error logging out", "error");
     }
   };
+
   const handleSaveProfile = async () => {
     if (!desc || !role) return showAlert("Fill all fields", "error");
 
+    // Compute age from DOB (0 = not set)
+    const ageToSend = computedAgeFromDob > 0 ? computedAgeFromDob : 0;
+
+    // Build payload
+    const payload = {
+      desc,
+      role,
+      dob: dob ? dob.toISOString() : null,
+      age: ageToSend,
+    };
+
     try {
-      const res = await secureFetch("/api/profile", {
+      const res = await secureFetch("/api/user/info", {
         method: profileExists ? "PUT" : "POST",
-        body: JSON.stringify({ desc, dob: dob.toISOString(), role }),
+        body: JSON.stringify(payload),
       });
 
       if (res.ok) {
         showAlert("Profile Updated!", "success");
         setEditMode(false);
-        fetchFreshProfile();
+        // refresh server data
+        await fetchUserInfo();
+        await fetchBlogs();
       } else {
         showAlert("Failed to save", "error");
       }
     } catch (err) {
+      console.error("Save Profile Error:", err);
       showAlert("Server error", "error");
     }
   };
@@ -208,11 +285,14 @@ export default function ProfileScreen({ navigation }) {
       if (res.ok) {
         showAlert("Deleted!", "success");
         fetchBlogs();
+      } else {
+        showAlert("Failed to delete", "error");
       }
     } catch (err) {
       showAlert("Error deleting", "error");
     } finally {
       setShowDeleteBlogConfirm(false);
+      setBlogToDelete(null);
     }
   };
 
@@ -232,7 +312,7 @@ export default function ProfileScreen({ navigation }) {
           <View style={styles.settingsPopup}>
             <TouchableOpacity
               style={styles.popupItem}
-              onPress={handleLogout} 
+              onPress={() => setShowLogoutConfirm(true)}
             >
               <Ionicons
                 name="log-out-outline"
@@ -277,13 +357,14 @@ export default function ProfileScreen({ navigation }) {
             style={{ marginRight: 10 }}
           />
           <Text style={{ color: "#fff" }}>
-            {dob.toDateString()} (Age: {age})
+            {dob ? dob.toDateString() : "Pick DOB"} (Age:{" "}
+            {computedAgeFromDob === 0 ? "Not set" : computedAgeFromDob})
           </Text>
         </TouchableOpacity>
 
         {showDatePicker && (
           <DateTimePicker
-            value={dob}
+            value={dob || new Date()}
             mode="date"
             display="default"
             onChange={onDateChange}
@@ -325,7 +406,7 @@ export default function ProfileScreen({ navigation }) {
                 loadMinimalSize={1}
               >
                 {blogs.map((blog) => (
-                  <View key={blog._id} style={styles.cardContainer}>
+                  <View key={blog._id || blog.id} style={styles.cardContainer}>
                     <Image
                       source={{
                         uri:
@@ -341,7 +422,7 @@ export default function ProfileScreen({ navigation }) {
                     <TouchableOpacity
                       style={styles.deleteButton}
                       onPress={() => {
-                        setBlogToDelete(blog._id);
+                        setBlogToDelete(blog._id || blog.id);
                         setShowDeleteBlogConfirm(true);
                       }}
                     >
@@ -359,6 +440,78 @@ export default function ProfileScreen({ navigation }) {
 
       <BottomBar />
 
+      {/* Logout Confirmation Modal */}
+      <Modal
+        visible={showLogoutConfirm}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowLogoutConfirm(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Confirm Logout</Text>
+            <Text style={styles.modalBody}>
+              Are you sure you want to log out? You'll need to sign in again.
+            </Text>
+            <View style={styles.modalButtons}>
+              <Pressable
+                style={[styles.modalButton, styles.cancelButton]}
+                onPress={() => setShowLogoutConfirm(false)}
+              >
+                <Text style={styles.modalButtonText}>Cancel</Text>
+              </Pressable>
+              <Pressable
+                style={[styles.modalButton, styles.confirmButton]}
+                onPress={handleLogout}
+              >
+                <Text style={[styles.modalButtonText, { color: "#fff" }]}>
+                  Logout
+                </Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Delete Blog Confirmation Modal */}
+      <Modal
+        visible={showDeleteBlogConfirm}
+        transparent
+        animationType="fade"
+        onRequestClose={() => {
+          setShowDeleteBlogConfirm(false);
+          setBlogToDelete(null);
+        }}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Delete Blog</Text>
+            <Text style={styles.modalBody}>
+              This will permanently delete the selected blog. Are you sure?
+            </Text>
+            <View style={styles.modalButtons}>
+              <Pressable
+                style={[styles.modalButton, styles.cancelButton]}
+                onPress={() => {
+                  setShowDeleteBlogConfirm(false);
+                  setBlogToDelete(null);
+                }}
+              >
+                <Text style={styles.modalButtonText}>Cancel</Text>
+              </Pressable>
+              <Pressable
+                style={[styles.modalButton, styles.deleteConfirmButton]}
+                onPress={handleDeleteBlog}
+              >
+                <Text style={[styles.modalButtonText, { color: "#fff" }]}>
+                  Delete
+                </Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
       {/* Alert Component */}
       {alertMessage.length > 0 && (
         <Animated.View
@@ -373,8 +526,6 @@ export default function ProfileScreen({ navigation }) {
           <Text style={styles.customAlertText}>{alertMessage}</Text>
         </Animated.View>
       )}
-
-      {/* Add your Confirmation Modals here (Delete/Logout) */}
     </>
   );
 }
@@ -484,4 +635,56 @@ const styles = StyleSheet.create({
     zIndex: 2000,
   },
   customAlertText: { color: "#fff", textAlign: "center", fontWeight: "bold" },
+
+  /* Modal styles */
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.6)",
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 20,
+  },
+  modalContent: {
+    width: "100%",
+    maxWidth: 420,
+    backgroundColor: "#111",
+    borderRadius: 12,
+    padding: 20,
+    borderWidth: 1,
+    borderColor: "#222",
+  },
+  modalTitle: {
+    color: "#fff",
+    fontSize: 18,
+    fontWeight: "700",
+    marginBottom: 6,
+  },
+  modalBody: {
+    color: "#ddd",
+    fontSize: 14,
+    marginBottom: 16,
+  },
+  modalButtons: {
+    flexDirection: "row",
+    justifyContent: "flex-end",
+  },
+  modalButton: {
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    marginLeft: 10,
+  },
+  modalButtonText: {
+    color: "#111",
+    fontWeight: "700",
+  },
+  cancelButton: {
+    backgroundColor: "#ddd",
+  },
+  confirmButton: {
+    backgroundColor: "#e74c3c",
+  },
+  deleteConfirmButton: {
+    backgroundColor: "#e74c3c",
+  },
 });
